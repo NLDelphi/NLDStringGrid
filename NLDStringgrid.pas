@@ -1,5 +1,5 @@
-(*******************************************************************************
-Om het maar even in de stijl van de oorspronkelijk auteur te zeggen:
+{/////////////////////////////////////////////////////////////////////////////
+Om het maar even in de stijl van de oorspronkelijke auteur te zeggen:
 
 Hier is 'tie dan:
 
@@ -64,8 +64,10 @@ Opgeloste bugs:
  - Breedte eerste kolom
  - Toevoegen, verwijderen en verplaatsen van Columns in Collection-editor
  - Niet meeverplaatsen van Cell-inhoud bij verplaatsen van Columns of Rows
+ - Niet meeverplaatsen van Columns bij slepen van Columns (alleen de Cell-
+   inhoud werd verplaatst)
  - Ctl3D bij fixed cellen
- - Alle options werken
+ - Niet alle options werkten
  - Overbodige property opslag in DFM
  - Opslag en terughalen van strings in eerder verwijderde columns/rows (maar
    dit kan ook een bewuste feature zijn geweest van Borland in TStringGrid,
@@ -81,11 +83,11 @@ Opgeloste bugs:
    in een vaste kleur kan. Windows berekent de kleur a.d.h.v. de achtergrond.
    Wel zijn er twee nieuwe FocusRectStyles bijgekomen waarbij je een kleur
    kunt opgeven.)
- - FocusRect bij alle geselecteerde cellen bij DrawFocusSelected = False
+ - FocusRect in alle geselecteerde cellen bij DrawFocusSelected = False
 
 Nieuwe bugs:
 ============
-
+ - Nog niet ontdekt
 
 TODO:
 =====
@@ -93,15 +95,12 @@ TODO:
  - AutoMerge (bij te lange tekst, automatisch de volgende cell erbij pakken)
  - AutoColWidths (aan tekstbreedte)
  - Printen
-
+ - Sorteren op column (met indicator)
 
 Heb je iets te vragen, gooi het hier neer.
 Alle ervaringen suggesties en bugreports/fixes zjn welkom!!
 
-*****************************************************************************)
-
-// - berkenen van de clHighLight color ???
-
+//////////////////////////////////////////////////////////////////////////////}
 
 unit UStringGridEx;
 
@@ -110,6 +109,14 @@ unit UStringGridEx;
 //  http://www.nldelphi.com/forum/forumdisplay.php?f=43  //
 ///////////////////////////////////////////////////////////
 
+
+//TODO:
+//- Insert/move/delete van columns beter regelen: inhoud wordt wel versleept,
+//  maar column niet!?  GOED ALLES DOORLOPEN!!
+//- Converteren via FormatString i.c.m. InputType goed testen!!!!
+//- Adden en inserten gaat nog niet goed
+//- Pointertype maken van TCellData
+
 interface
 
 uses
@@ -117,7 +124,6 @@ uses
 
 type
   TStringGridColumn = class;
-  TStringGridColumns = class;
   TStringGridEx = class;
 
   TVAlignment = (tvaTop, tvaCenter, tvaBottom);
@@ -163,10 +169,12 @@ type
       default tvaTop;
   end;
 
+  TStringGridColumns = class;
+
   TInputStyle = (isString, isInteger, isAbsInteger, isFloat, isAbsFloat,
     isMask);
 
-//  TEditStyle = (esSimple, esEllipse, esPickList, esPickListOnly);
+  TEditStyle = (esSimple, esEllipsis, esPickList, esPickListOnly);
 
   TStringGridColumn = class(TCollectionItem)
   private
@@ -185,7 +193,6 @@ type
     FMinWidth: Integer;
     FMultiLine: Boolean;
     FPickListItems: TStrings;
-    FPickListOnly: Boolean;
     FReadOnly: Boolean;
     FRowNumbers: Boolean;
     FTitle: TStringGridTitle;
@@ -220,6 +227,7 @@ type
     procedure SetWidth(const Value: Integer);
   protected
     Destroying: Boolean;
+    Moving: Boolean;
     procedure FontChanged(Sender: TObject); virtual;
     function GetDisplayName: String; override;
     procedure SetIndex(Value: Integer); override;
@@ -250,8 +258,6 @@ type
       default False;
     property PickListItems: TStrings read FPickListItems
       write SetPickListItems stored IsPickListItemsStored;
-    property PickListOnly: Boolean read FPickListOnly write FPickListOnly
-      default True;
     property ReadOnly: Boolean read FReadOnly write SetReadOnly default False;
     property RowNumbers: Boolean read FRowNumbers write SetRowNumbers
       default False;
@@ -333,6 +339,7 @@ type
       write SetOverrideColumnColor default True;
   end;
 
+  PCellData = ^TCellData;
   TCellData = record
     FMerged: Boolean;
     FMergeCol: Integer;
@@ -370,7 +377,7 @@ type
 
   TInplaceEditListEx = class(TInplaceEditList)
   private
-    PickListOnly: Boolean;
+    FPickListOnly: Boolean;
     function Grid: TStringGridEx;
     function PickListItemIndexOf(const Value: String): Integer;
     procedure WMWindowPosChanging(var Message: TWMWindowPosMsg);
@@ -383,7 +390,7 @@ type
 
   TStringGridEx = class(TCustomDrawGrid)
   private
-    FCellData: array of array of TCellData;
+    FCellData: array of array of PCellData;
     FColumns: TStringGridColumns;
     FColRowStrings: TStringGridStrings;
     FDefaultDrawing: TDefaultDrawingModes;
@@ -403,7 +410,9 @@ type
     FSelectionColor: TColor;
     FStretchModes: TStretchModes;
     FSyncColumns: Boolean;
-    function CanMergedEditShow: Boolean;
+    function CanColumnMove(const FromIndex, ToIndex: Integer): Boolean;
+    function CanEdit: Boolean;
+    function CellData(const ACol, ARow: Integer): TCellData;
     procedure ChangeEditFormat(const ACol: Integer;
       const OldFormat, NewFormat: String);
     procedure CMFontChanged(var Message: TMessage); message CM_FONTCHANGED;
@@ -420,7 +429,6 @@ type
     function GetReadOnlyColor: TColor;
     function GetRows(Index: Integer): TStrings;
     function GetValues(ACol, ARow: Integer): Double;
-    function InGrid(const ACol, ARow: Integer): Boolean;
     procedure InvalidateGridRect(const AGridRect: TGridRect);
     function IsAlternatingRowColorsStored: Boolean;
     function IsColumnsStored: Boolean;
@@ -461,23 +469,29 @@ type
     function CanEditAcceptKey(Key: Char): Boolean; override;
     function CanEditModify: Boolean; override;
     function CanEditShow: Boolean; override;
+    function CheckColumnDrag(var Origin, Destination: Integer;
+      const MousePt: TPoint): Boolean; override;
     procedure ColumnMoved(FromIndex, ToIndex: Integer); override;
     procedure ColWidthsChanged; override;
     function CreateEditor: TInplaceEdit; override;
     procedure DrawCell(ACol, ARow: Integer; ARect: TRect;
       AState: TGridDrawState); override;
+    function EndColumnDrag(var Origin: Integer; var Destination: Integer;
+      const MousePt: TPoint): Boolean; override;
     function GetCellColor(const ACol, ARow: Integer;
       const AState: TGridDrawState; Column: TStringGridColumn;
-      const CellData: TCellData): TColor;
+      const CellData: TCellData): TColor; virtual;
     function GetCellData(const ACol, ARow: Integer): TCellData;
-    procedure GetCellFont(AFont: TFont; const ARow: Integer;
-      const AState: TGridDrawState; Column: TStringGridColumn);
+    procedure GetCellFont(AFont: TFont; Column: TStringGridColumn;
+      const ARow: Integer; const AState: TGridDrawState); virtual;
     function GetEditLimit: Integer; override;
     function GetEditMask(ACol: Integer; ARow: Integer): String; override;
-    function GetEditStyle(ACol: Integer; ARow: Integer): TEditStyle;
+    function GetEditStyle(ACol: Integer; ARow: Integer): Grids.TEditStyle;
       override;
     function GetEditText(ACol: Integer; ARow: Integer): String; override;
     function GetMergeRect(const ACol, ARow: Integer): TGridRect;
+    function InGrid(const ACol, ARow: Integer;
+      const IncludeFixed: Boolean): Boolean;
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X: Integer;
       Y: Integer); override;
     procedure Paint; override;
@@ -622,20 +636,24 @@ begin
   RegisterComponents('Albert', [TStringGridEx]);
 end;
 
+const
+  sInvalidStringsOp =
+    'Cannot insert or delete within grid rows or columns this way';
+  sInvalidColumnOwnerType =
+    'Owner of Column has be of type TStringGridColumns';
+  sInvalidColumnOwner =
+    'Owner of Column has to be assigned';
+  sInvalidInsertIndex =
+    'Insertion index out of range';
+  sInvalidColumnMovement =
+    'Cannot move this column';
+
 type
   TRGB = record
     R: Byte;
     G: Byte;
     B: Byte;
   end;
-
-const
-  sInvalidStringGridStringsOp =
-    'Cannot insert or delete within grid rows or columns this way';
-  sInvalidStringGridColumnOwnerType =
-    'Owner of Column has be of type TStringGridColumns';
-  sInvalidStringGridColumnOwner =
-    'Owner of Column has to be assigned';
 
 function GetRGB(AColor: TColor): TRGB;
 begin
@@ -691,7 +709,7 @@ begin
     end;
   end
   else
-    inherited;
+    inherited Assign(Source);
 end;
 
 procedure TStringGridTitle.Changed(const AllColumns: Boolean);
@@ -716,7 +734,7 @@ end;
 destructor TStringGridTitle.Destroy;
 begin
   FFont.Free;
-  inherited;
+  inherited Destroy;
 end;
 
 procedure TStringGridTitle.FontChanged(Sender: TObject);
@@ -792,7 +810,7 @@ begin
   if Assigned(FGrid) then
     FGrid.RowHeights[0] := Value
   else
-    raise EInvalidGridOperation.Create(sInvalidStringGridColumnOwner);
+    raise EInvalidGridOperation.Create(sInvalidColumnOwner);
 end;
 
 procedure TStringGridTitle.SetMultiLine(const Value: Boolean);
@@ -835,7 +853,6 @@ begin
       FMinWidth := TStringGridColumn(Source).FMinWidth;
       FMultiLine := TStringGridColumn(Source).FMultiLine;
       FPickListItems.Assign(TStringGridColumn(Source).FPickListItems);
-      FPickListOnly := TStringGridColumn(Source).FPickListOnly;
       FReadOnly := TStringGridColumn(Source).FReadOnly;
       FRowNumbers := TStringGridColumn(Source).FRowNumbers;
       FTitle.Assign(TStringGridColumn(Source).FTitle);
@@ -846,12 +863,12 @@ begin
     end;
   end
   else
-    inherited;
+    inherited Assign(Source); 
 end;
 
 constructor TStringGridColumn.Create(Collection: TCollection);
 begin
-  inherited;
+  inherited Create(Collection);
   FColor := clDefault;
   FFont := TFont.Create;
   if Assigned(Collection) then
@@ -868,10 +885,9 @@ begin
       end;
     end
     else
-      raise EInvalidGridOperation.Create(sInvalidStringGridColumnOwnerType);
+      raise EInvalidGridOperation.Create(sInvalidColumnOwnerType);
   FFont.OnChange := FontChanged;
   FPickListItems := TStringList.Create;
-  FPickListOnly := True;
   FTitle := TStringGridTitle.Create(Self);
   FTitle.FCaption := 'Column' + IntToStr(Index);
 end;
@@ -882,7 +898,7 @@ begin
   FPickListItems.Free;
   FTitle.Free;
   FFont.Free;
-  inherited;
+  inherited Destroy; 
 end;
 
 procedure TStringGridColumn.FontChanged(Sender: TObject);
@@ -1028,7 +1044,7 @@ begin
         False: FGrid.FixedCols := Index;
       end
     else
-      raise EInvalidGridOperation.Create(sInvalidStringGridColumnOwner);
+      raise EInvalidGridOperation.Create(sInvalidColumnOwner);
 end;
 
 procedure TStringGridColumn.SetFont(const Value: TFont);
@@ -1038,9 +1054,14 @@ end;
 
 procedure TStringGridColumn.SetIndex(Value: Integer);
 begin
-  if Assigned(FGrid) then
-    FGrid.MoveColumn(Index, Value);
-  inherited;
+  Moving := True;
+  try
+    if Assigned(FGrid) then
+      FGrid.MoveColumn(Index, Value);
+    inherited SetIndex(Value);
+  finally
+    Moving := False;
+  end;
 end;
 
 procedure TStringGridColumn.SetInputStyle(const Value: TInputStyle);
@@ -1100,7 +1121,7 @@ begin
     if Assigned(FGrid) then
       with FGrid do
         for iRow := FixedRows to (RowCount - 1) do
-          FCellData[Index][iRow].FReadOnly := FReadOnly;
+          FCellData[Index, iRow].FReadOnly := FReadOnly;
     Changed(False);
   end;
 end;
@@ -1137,7 +1158,7 @@ begin
         False: Width := -FGrid.GridLineWidth;
       end
     else
-      raise EInvalidGridOperation.Create(sInvalidStringGridColumnOwner);
+      raise EInvalidGridOperation.Create(sInvalidColumnOwner);
 end;
 
 procedure TStringGridColumn.SetWidth(const Value: Integer);
@@ -1145,7 +1166,7 @@ begin
   if Assigned(FGrid) then
     FGrid.ColWidths[Index] := Value
   else
-    raise EInvalidGridOperation.Create(sInvalidStringGridColumnOwner);
+    raise EInvalidGridOperation.Create(sInvalidColumnOwner);
 end;
 
 { TStringGridColumns }
@@ -1174,7 +1195,7 @@ procedure TStringGridColumns.Notify(Item: TCollectionItem;
 begin
   if Action = cnDeleting then
     Grid.DeleteColumn(Item.Index);
-  inherited;
+  inherited Notify(Item, Action);
 end;
 
 procedure TStringGridColumns.SetItem(Index: Integer;
@@ -1185,7 +1206,7 @@ end;
 
 procedure TStringGridColumns.Update(Item: TCollectionItem);
 begin
-  inherited;
+  inherited Update(Item);
   if Assigned(FGrid) then
     if Item <> nil then
       FGrid.UpdateColumn(Item.Index)
@@ -1249,13 +1270,13 @@ begin
   try
     for i := 0 to (Count - 1) do
       if FIsCol then
-        with FGrid.FCellData[FIndex, i] do
+        with FGrid.CellData(FIndex, i) do
         begin
           FString := '';
           FObject := nil;
         end
       else
-        with FGrid.FCellData[i, FIndex] do
+        with FGrid.CellData(i, FIndex) do
         begin
           FString := '';
           FObject := nil;
@@ -1273,7 +1294,7 @@ end;
 
 procedure TStringGridStrings.Delete(Index: Integer);
 begin
-  raise EInvalidGridOperation.Create(sInvalidStringGridStringsOp);
+  raise EInvalidGridOperation.Create(sInvalidStringsOp);
 end;
 
 function TStringGridStrings.Get(Index: Integer): String;
@@ -1302,7 +1323,7 @@ end;
 
 procedure TStringGridStrings.Insert(Index: Integer; const S: String);
 begin
-  raise EInvalidGridOperation.Create(sInvalidStringGridStringsOp);
+  raise EInvalidGridOperation.Create(sInvalidStringsOp);
 end;
 
 function TStringGridStrings.LinkGridCol(const AIndex: Integer): TStrings;
@@ -1342,7 +1363,7 @@ begin
       FGrid.InvalidateCol(FIndex)
     else
       FGrid.InvalidateRow(FIndex);
-  inherited;
+  inherited SetUpdateState(Updating);
 end;
 
 { TStringGridRowColors }
@@ -1357,8 +1378,9 @@ begin
     FOverrideColumnColor := TStringGridRowColors(Source).FOverrideColumnColor;
     if Assigned(FGrid) then
       FGrid.InvalidateGrid;
-  end;
-  inherited;
+  end
+  else
+    inherited Assign(Source);
 end;
 
 constructor TStringGridRowColors.Create(AGrid: TStringGridEx);
@@ -1451,7 +1473,7 @@ begin
       DropDown;
     Key := 0;
   end;
-  inherited;
+  inherited DoDropDownKeys(Key, Shift);
 end;
 
 function TInplaceEditListEx.Grid: TStringGridEx;
@@ -1475,23 +1497,23 @@ end;
 
 procedure TInplaceEditListEx.UpdateContents;
 begin
-  inherited;
+  inherited UpdateContents;
   with Grid do
   begin
-    Self.Color := GetCellColor(Col, Row, [], Columns[Col], FCellData[Col, Row]);
-    GetCellFont(Self.Font, Row, [], Columns[Col]);
-    if (EditStyle = esPickList) and Assigned(Columns[Col]) then
+    Self.Color := GetCellColor(Col, Row, [], Columns[Col], CellData(Col, Row));
+    GetCellFont(Self.Font, Columns[Col], Row, []);
+    if (EditStyle = Grids.esPickList) and Assigned(Columns[Col]) then
     begin
       PickList.Items.Assign(Columns[Col].PickListItems);
-      PickListOnly := Columns[Col].PickListOnly;
+      FPickListOnly := Columns[Col].EditStyle = esPickListOnly;
     end;
   end;
 end;
 
 procedure TInplaceEditListEx.WMWindowPosChanging(var Message: TWMWindowPosMsg);
 begin
-  with Grid do
-    if CanMergedEditShow and FCellData[Col, Row].FMerged then
+  with Grid, CellData(Col, Row) do
+    if CanEdit and FMerged and FMergeText then
       with GetMergeRect(Col, Row) do
         with BoxRect(Left, Top, Right, Bottom) do
         begin
@@ -1505,7 +1527,7 @@ end;
 
 procedure TInplaceEditListEx.WndProc(var Message: TMessage);
 begin
-  if EditStyle = esPickList then
+  if EditStyle = Grids.esPickList then
     case Message.Msg of
       WM_KEYDOWN, WM_SYSKEYDOWN:
         with TWMKey(Message) do
@@ -1523,7 +1545,7 @@ begin
         end;
       WM_CHAR:
         begin
-          if PickListOnly then
+          if FPickListOnly then
             with Message do
               SendMessage(ActiveList.Handle, Msg, WParam, LParam)
           else
@@ -1535,7 +1557,7 @@ begin
           Exit;
         end;
     end;
-  inherited;
+  inherited WndProc(Message);
 end;
 
 { TStringGridEx }
@@ -1545,6 +1567,31 @@ begin
   //TCustomGrid.AdjustSize is obsolete and has wrong result for this
   //descendant. Instead, use the methods DeleteColumn, DeleteRows,
   //InsertColumn and InsertRow, which take care of Merged Cells.
+end;
+
+function TStringGridEx.CanColumnMove(const FromIndex,
+  ToIndex: Integer): Boolean;
+begin
+  if SyncColumns then
+    Result := True
+  else
+    Result := ((FromIndex >= Columns.Count) and (ToIndex >= Columns.Count)) or
+      ((FromIndex < Columns.Count) and (ToIndex < Columns.Count));
+  if Assigned(Columns[FromIndex]) then
+    if Columns[FromIndex].Moving then
+      Result := False;
+  if Assigned(Columns[ToIndex]) then
+    if Columns[ToIndex].Moving then
+      Result := False;
+end;
+
+function TStringGridEx.CanEdit: Boolean;
+begin
+  with CellData(Col, Row) do
+    Result := not FReadOnly
+              and (not FMerged
+                   or (FMerged and ((FmergeCol > Col) or (FMergeRow > Row)))
+                   or (FMerged and not FMergeText));
 end;
 
 function TStringGridEx.CanEditAcceptKey(Key: Char): Boolean;
@@ -1579,20 +1626,18 @@ end;
 
 function TStringGridEx.CanEditModify: Boolean;
 begin
-  Result := CanMergedEditShow and (not FCellData[Col, Row].FReadOnly);
+  Result := CanEdit;
 end;
 
 function TStringGridEx.CanEditShow: Boolean;
 begin
-  Result := ((CanMergedEditShow and not CellsReadOnly[Col, Row]) or
-    (goAlwaysShowEditor in Options)) and inherited CanEditShow;
+  Result := inherited CanEditShow
+            and (CanEdit or (goAlwaysShowEditor in Options))
 end;
 
-function TStringGridEx.CanMergedEditShow: Boolean;
+function TStringGridEx.CellData(const ACol, ARow: Integer): TCellData;
 begin
-  with FCellData[Col, Row] do
-    Result := (not FMerged) or
-      (FMerged and FMergeText and (FMergeCol > Col) and (FMergeRow > Row));
+  Result := FCellData[ACol, ARow]^;
 end;
 
 procedure TStringGridEx.ChangeEditFormat(const ACol: Integer;
@@ -1601,13 +1646,19 @@ var
   iRow: Integer;
 begin
   for iRow := 0 to (RowCount - 1) do
-    with FCellData[ACol, iRow] do
+    with CellData(ACol, iRow) do
       if FString <> '' then
         try
           if Format(OldFormat, [FValue]) = FString then
             FString := Format(NewFormat, [FValue]);
         except
         end;
+end;
+
+function TStringGridEx.CheckColumnDrag(var Origin, Destination: Integer;
+  const MousePt: TPoint): Boolean;
+begin
+  Result := CanColumnMove(Origin, Destination);
 end;
 
 procedure TStringGridEx.CMFontChanged(var Message: TMessage);
@@ -1628,25 +1679,32 @@ procedure TStringGridEx.ColumnMoved(FromIndex, ToIndex: Integer);
 var
   iRow, iCol: Integer;
 begin
-  for iRow := (RowCount - 1) downto 0 do
+  if CanColumnMove(FromIndex, ToIndex) then
   begin
-    UnMergeCell(FromIndex, iRow);
-    if ToIndex > FromIndex then
+    for iRow := (RowCount - 1) downto 0 do
     begin
-      if ToIndex < GetMergeRect(ToIndex, iRow).Right then
-        UnMergeCell(ToIndex, iRow);
-      for iCol := (FromIndex + 1) to ToIndex do
-        ExchangeCellData(iCol, iRow, iCol - 1, iRow)
-    end
-    else
-    begin
-      if ToIndex > GetMergeRect(ToIndex, iRow).Left then
-        UnMergeCell(ToIndex, iRow);
-      for iCol := (FromIndex - 1) downto ToIndex do
-        ExchangeCellData(iCol, iRow, iCol + 1, iRow);
+      UnMergeCell(FromIndex, iRow);
+      if ToIndex > FromIndex then
+      begin
+        if ToIndex < GetMergeRect(ToIndex, iRow).Right then
+          UnMergeCell(ToIndex, iRow);
+        for iCol := (FromIndex + 1) to ToIndex do
+          ExchangeCellData(iCol, iRow, iCol - 1, iRow)
+      end
+      else
+      begin
+        if ToIndex > GetMergeRect(ToIndex, iRow).Left then
+          UnMergeCell(ToIndex, iRow);
+        for iCol := (FromIndex - 1) downto ToIndex do
+          ExchangeCellData(iCol, iRow, iCol + 1, iRow);
+      end;
     end;
+    if (FromIndex < Columns.Count) and (ToIndex < Columns.Count) then
+      Columns[FromIndex].Index := ToIndex;
+    InvalidateGridRect(TGridRect(
+      Rect(Min(FromIndex, ToIndex), 0, Max(FromIndex, ToIndex), RowCount - 1)));
+    inherited ColumnMoved(FromIndex, ToIndex);
   end;
-  inherited;
 end;
 
 procedure TStringGridEx.ColWidthsChanged;
@@ -1657,7 +1715,7 @@ begin
   try
     ColWidthsUpdating := True;
     UpdateColWidths;
-    inherited;
+    inherited ColWidthsChanged;
   finally
     ColWidthsUpdating := False;
   end;
@@ -1665,7 +1723,7 @@ end;
 
 constructor TStringGridEx.Create(AOwner: TComponent);
 begin
-  inherited;
+  inherited Create(AOwner);
   SizeChanged(0, 0); //Set size of FCellData
   inherited DefaultDrawing := False; //There's no inherited drawing at all!
   ParentBidiMode := False;
@@ -1701,9 +1759,9 @@ end;
 procedure TStringGridEx.DeleteColumn(ACol: Integer);
 begin
   if Assigned(Columns[ACol]) then
-    if not Columns[ACol].Destroying then
+    if not Columns[ACol].Destroying then //needed in case of Columns[n].Free
       Columns[ACol].Free;
-  inherited;
+  inherited DeleteColumn(ACol);
 end;
 
 procedure TStringGridEx.DeleteRows(const DeletePos: TDeletePos;
@@ -1742,7 +1800,7 @@ begin
   FFontBackup.Free;
   FFixedFontBackup.Free;
   FFixedFont.Free;
-  inherited;
+  inherited Destroy;
 end;
 
 procedure TStringGridEx.DrawCell(ACol, ARow: Integer; ARect: TRect;
@@ -1750,6 +1808,12 @@ procedure TStringGridEx.DrawCell(ACol, ARow: Integer; ARect: TRect;
 begin
   if Assigned(FOnDrawCell) then
     FOnDrawCell(Self, ACol, ARow, ARect, AState, Columns[ACol]);
+end;
+
+function TStringGridEx.EndColumnDrag(var Origin, Destination: Integer;
+  const MousePt: TPoint): Boolean;
+begin
+  Result := CanColumnMove(Origin, Destination);
 end;
 
 procedure TStringGridEx.ExchangeCellData(const FromCol, FromRow, ToCol,
@@ -1839,8 +1903,8 @@ begin
   Result := FCellData[ACol, ARow]
 end;
 
-procedure TStringGridEx.GetCellFont(AFont: TFont; const ARow: Integer;
-  const AState: TGridDrawState; Column: TStringGridColumn);
+procedure TStringGridEx.GetCellFont(AFont: TFont; Column: TStringGridColumn;
+  const ARow: Integer; const AState: TGridDrawState);
 begin
   case Assigned(Column) of
     True: case (gdFixed in AState) and (ARow < FixedRows) of
@@ -1860,7 +1924,7 @@ end;
 
 function TStringGridEx.GetCells(ACol, ARow: Integer): String;
 begin
-  if InGrid(ACol, ARow) then
+  if InGrid(ACol, ARow, True) then
     Result := FCellData[ACol, ARow].FString
   else
     Result := '';
@@ -1868,7 +1932,7 @@ end;
 
 function TStringGridEx.GetCellsReadOnly(ACol, ARow: Integer): Boolean;
 begin
-  if InGrid(ACol, ARow) then
+  if InGrid(ACol, ARow, True) then
     Result := FCellData[ACol, ARow].FReadOnly
   else
     Result := False;
@@ -1901,17 +1965,22 @@ begin
       Result := Columns[ACol].EditMask;
 end;
 
-function TStringGridEx.GetEditStyle(ACol, ARow: Integer): TEditStyle;
+function TStringGridEx.GetEditStyle(ACol, ARow: Integer): Grids.TEditStyle;
 begin
   if Assigned(Columns[ACol]) then
-    Result := Columns[ACol].EditStyle
+    case Columns[ACol].EditStyle of
+      esSimple  : Result := Grids.esSimple;
+      esEllipsis: Result := Grids.esEllipsis;
+      esPickList: Result := Grids.esPickList;
+      else        Result := Grids.esPickList
+    end
   else
-    Result := esSimple;
+    Result := Grids.esSimple;
 end;
 
 function TStringGridEx.GetEditText(ACol, ARow: Integer): String;
 begin
-  if CanMergedEditShow then
+  if CanEdit then
     Result := FCellData[ACol, ARow].FString
   else
     Result := '';
@@ -1964,7 +2033,7 @@ end;
 
 function TStringGridEx.GetObjects(ACol, ARow: Integer): TObject;
 begin
-  if InGrid(ACol, ARow) then
+  if InGrid(ACol, ARow, True) then
     Result := FCellData[ACol, ARow].FObject
   else
     Result := nil;
@@ -1985,26 +2054,34 @@ end;
 
 function TStringGridEx.GetValues(ACol, ARow: Integer): Double;
 begin
-  if InGrid(ACol, ARow) then
+  if InGrid(ACol, ARow, True) then
     Result := FCellData[ACol, ARow].FValue
   else
     Result := 0;
 end;
 
-function TStringGridEx.InGrid(const ACol, ARow: Integer): Boolean;
+function TStringGridEx.InGrid(const ACol, ARow: Integer;
+  const IncludeFixed: Boolean): Boolean;
 begin
-  Result := (ACol >= 0) and (ACol < ColCount) and
-    (ARow >= 0) and (ARow < RowCount);
+  Result := (ACol < ColCount) and (ARow < RowCount);
+  if IncludeFixed then
+    Result := Result and (ACol >= 0) and (ARow >= 0)
+  else
+    Result := Result and (ACol >= FixedCols) and (ARow >= FixedRows);
 end;
 
 procedure TStringGridEx.InsertColumn(const AtIndex: Integer);
 begin
-  if SyncColumns then
-    Columns.Add
-  else
+  if (AtIndex < 0) or (AtIndex > ColCount) then
+    raise EInvalidGridOperation.Create(sInvalidInsertIndex);
+  if AtIndex > Columns.Count then
+  begin
     ColCount := ColCount + 1;
-  if AtIndex < ColCount - 1 then
-    MoveColumn(ColCount - 1, AtIndex);
+    if AtIndex < ColCount - 1 then
+      MoveColumn(ColCount - 1, AtIndex);
+  end
+  else
+    Columns[Columns.Add.Index].Index := AtIndex;
   if AtIndex < FixedCols then
     FixedCols := FixedCols + 1;
 end;
@@ -2145,10 +2222,10 @@ var
   SaveState: TGridState;
 begin
   SaveState := FGridState;
-  inherited;
+  inherited MouseUp(Button, Shift, X, Y);
   if Assigned(FOnTitleClick) then
   begin
-    if (SaveState = gsRowSizing) or (SaveState = gsColSizing) or
+    if (SaveState in [gsRowSizing, gsColSizing]) or
       ((InplaceEditor <> nil) and (InplaceEditor.Visible) and
       (PtInRect(InplaceEditor.BoundsRect, Point(X, Y)))) then
       Exit;
@@ -2161,7 +2238,10 @@ end;
 
 procedure TStringGridEx.MoveColumn(const FromIndex, ToIndex: Integer);
 begin
-  inherited MoveColumn(FromIndex, ToIndex);
+  if CanColumnMove(FromIndex, ToIndex) then
+    inherited MoveColumn(FromIndex, ToIndex);
+//  else
+//    raise EInvalidGridOperation.Create(sInvalidColumnMovement);
 end;
 
 procedure TStringGridEx.MoveRow(const FromIndex, ToIndex: Integer);
@@ -2342,7 +2422,7 @@ var
       if ddText in DefaultDrawing then
       begin
         Brush.Style := bsClear;
-        GetCellFont(Font, ARow, AState, Column);
+        GetCellFont(Font, Column, ARow, AState);
         if DrawSelected then
           Font.Color := GetSelectionColor(Font.Color, True);
         TxtFlags := DT_END_ELLIPSIS or DT_NOPREFIX;
@@ -2490,6 +2570,16 @@ var
   end;
 
 begin
+  if FGridState in [gsColMoving, gsRowMoving] then
+  begin
+//    Invalidate;
+//    with TForm(Owner) do
+//      Caption := Caption + '.';
+    inherited Paint; //What has TCustomGrid.Paint to do with drawing temporarily
+                     //XOR-lines when sizing column or row? Well, this works!
+    Exit;
+  end;
+  
   CalcDrawInfo(DrawInfo);
 
   with Canvas.ClipRect do
@@ -2560,7 +2650,7 @@ begin
         FillRect(Rect(0, Vert.GridBoundary, Horz.GridExtent, Vert.GridExtent));
       end;
     end;
-end;
+end;  
 
 procedure TStringGridEx.RowMoved(FromIndex, ToIndex: Integer);
 var
@@ -2584,19 +2674,21 @@ begin
         ExchangeCellData(iCol, iRow, iCol, iRow + 1);
     end;
   end;
-  inherited;
+  InvalidateGridRect(TGridRect(
+    Rect(0, Min(FromIndex, ToIndex), ColCount - 1, Max(FromIndex, ToIndex))));
+  inherited RowMoved(FromIndex, ToIndex);
 end;
 
 procedure TStringGridEx.SetBounds(ALeft, ATop, AWidth, AHeight: Integer);
 begin
-  inherited;
+  inherited SetBounds(ALeft, ATop, AWidth, AHeight);
   if HasParent then
     ColWidthsChanged;
 end;
 
 procedure TStringGridEx.SetCells(ACol, ARow: Integer; const Value: String);
 begin
-  if InGrid(ACol, ARow) then
+  if InGrid(ACol, ARow, True) then
   begin
     FCellData[ACol, ARow].FString := Value;
     InvalidateCell(ACol, ARow);
@@ -2606,7 +2698,7 @@ end;
 procedure TStringGridEx.SetCellsReadOnly(ACol, ARow: Integer;
   const Value: Boolean);
 begin
-  if InGrid(ACol, ARow) and (ACol >= FixedCols) and (ARow >= FixedRows) then
+  if InGrid(ACol, ARow, False) then
   begin
     FCellData[ACol, ARow].FReadOnly := Value;
     InvalidateCell(ACol, ARow);
@@ -2704,7 +2796,7 @@ end;
 
 procedure TStringGridEx.SetEditText(ACol, ARow: Integer; const Value: String);
 begin
-  if CanMergedEditShow then
+  if CanEdit then
     SetCellValue(ACol, ARow, Value);
 end;
 
@@ -2811,7 +2903,7 @@ begin
     for i := 0 to (Columns.Count - 1 - FixedCols) do
       Columns[i + FixedCols].Color := MixColor(First, Last, i / (Count - 1));
     if not ColumnsOnly then
-      Color := MixColor(First, Last, 2);
+      Color := MixColor(First, Last, 1);
   finally
     Columns.EndUpdate;
   end;
@@ -2845,7 +2937,7 @@ end;
 
 procedure TStringGridEx.SetObjects(ACol, ARow: Integer; const Value: TObject);
 begin
-  if InGrid(ACol, ARow) then
+  if InGrid(ACol, ARow, True) then
     FCellData[ACol, ARow].FObject := Value;
 end;
 
@@ -2916,7 +3008,7 @@ end;
 
 procedure TStringGridEx.SetValues(ACol, ARow: Integer; const Value: Double);
 begin
-  if InGrid(ACol, ARow) then
+  if InGrid(ACol, ARow, True) then
   begin
     SetCellValue(ACol, ARow, FloatToStr(Value));
     InvalidateCell(ACol, ARow);
@@ -2938,7 +3030,7 @@ begin
     for iCol := 0 to (Columns.Count - 1) do
       for iRow := (OldRowCount) to (RowCount - 1) do
         FCellData[iCol, iRow].FReadOnly := Columns[iCol].ReadOnly;
-  inherited;
+  inherited SizeChanged(OldColCount, OldRowCount);
   if HasParent then
     ColWidthsChanged;
 end;
@@ -2951,7 +3043,15 @@ begin
     with GetMergeRect(ACol, ARow) do
       for iCol := Left to Right do
         for iRow := Top to Bottom do
+        begin
           FCellData[iCol, iRow].FMerged := False;
+          //FMerged = False takes care for these values...
+          //FCellData[iCol, iRow].FMergeCol := -1;
+          //FCellData[iCol, iRow].FMergeRow := -1;
+          //FCellData[iCol, iRow].FMergeText := False;
+          //FCellData[iCol, iRow].FMergeML := False;
+          InvalidateCell(iCol, iRow);
+        end;
 end;
 
 procedure TStringGridEx.UnMergeCells(const AGridRect: TGridRect);
@@ -2962,7 +3062,6 @@ begin
     for iCol := Left to Right do
       for iRow := Top to Bottom do
         UnMergeCell(iCol, iRow);
-  InvalidateGridRect(AGridRect);
 end;
 
 procedure TStringGridEx.UpdateColumn(const Index: Integer);
@@ -2997,8 +3096,6 @@ begin
         ColWidths[i] := Min(MaxWidth, Width);
     end;
 
-
-
 //  Space := ClientWidth - GridWidth;
 //  if Space > 0 then
 //      case FStretchModes of
@@ -3009,6 +3106,9 @@ end;
 
 procedure TStringGridEx.WMEraseBkgnd(var Message: TWmEraseBkgnd);
 begin
+  if FGridState in [gsColMoving, gsRowMoving] then
+    with TForm(Owner) do
+      Caption := Caption + 'E';
   if ddBackground in DefaultDrawing then
     Message.Result := 1
   else
