@@ -3,7 +3,7 @@ Om het maar even in de stijl van de oorspronkelijke auteur te zeggen:
 
 Hier is 'tie dan:
 
-NLDStringGrid v1.1
+NLDStringGrid v2.0
 
 TNLDStringGrid:
 ===============
@@ -14,6 +14,8 @@ Toegevoegde functionaliteit:
    weer de standaardkleur krijgen
  - Merging: samenvoegen van cellen
  - Merged InplaceEdit(List) met font en achtergrondkleur van betreffende cell
+ - Stamt nu af van TCustomDrawGrid i.p.v. TStringGrid: geheel nieuwe opslag-
+   methodiek
 
 Toegevoegde properties en events:
  - AlternatingRowColors:
@@ -73,7 +75,7 @@ Opgeloste bugs:
    inhoud werd verplaatst)
  - Ctl3D bij fixed cellen
  - Niet alle options werkten
- - Overbodige property opslag in DFM
+ - Overbodige property opslag in DFM. Elke property heeft een defaut value
  - Opslag en terughalen van strings in eerder verwijderde columns/rows (maar
    dit kan ook een bewuste feature zijn geweest van Borland in TStringGrid,
    heeft te maken met opslag van de data: Ik gebruik een eenvoudig twee-
@@ -82,7 +84,8 @@ Opgeloste bugs:
    directe geheugenlocaties. De keuze is ook afhankelijk van het feit dat ik
    meer data per cell wilde bewaren dan slechts een string en een object. Evt.
    zou je het standaard object van een cell kunnen toewijzen aan een eigen
-   dataclasse, maar dat leek me ingewikkelder.)
+   dataclasse, maar dat leek me nodeloos ingewikkelder en zou meer geheugen
+   vragen.)
  - FixedLineColor
  - FocusRectColor (dat was geen echte bug, omdat het FocusRect van Windows niet
    in een vaste kleur kan. Windows berekent de kleur a.d.h.v. de achtergrond.
@@ -118,18 +121,20 @@ Alle commentaren, ervaringen, suggesties en bugreports/fixes zjn welkom!!
 
 unit UStringGridEx;
 
-///////////////////////////////////////////////////////////
-//  With special thanks to walterheck:                   //
-//  http://www.nldelphi.com/forum/forumdisplay.php?f=43  //
-///////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+//                                                                           //
+//  With special thanks to walterheck:                                       //
+//  - http://www.nldelphi.com/forum/forumdisplay.php?f=43                    //
+//                                                                           //
+///////////////////////////////////////////////////////////////////////////////
 
 
 //NOG DOEN VOORDAT WE GAAN PUBLICEREN:
 //- Converteren via FormatString i.c.m. InputType goed testen!!!!
 //- StretchModes
-//- Te ver scrollen bij halve regels voorkomen:
-//  http://www.nldelphi.com/Forum/showthread.php?t=20027&highlight=%2AStringGrid%2A
+
 //- TESTEN, TESTEN, NOG MEER TESTEN!!!
+//- Alle exceptions een keertje oproepen...
 
 interface
 
@@ -137,6 +142,11 @@ uses
   Classes, SysUtils, Grids, Windows, Graphics, Controls, Messages, MaskUtils;
 
 type
+  EStringGridError = class(EComponentError)
+  public
+    procedure AfterConstruction; override;
+  end;
+
   TStringGridColumn = class;
   TStringGridEx = class;
 
@@ -288,7 +298,7 @@ type
   private
     FGrid: TStringGridEx;
     FOnChanged: TColumnsChangedEvent;
-    procedure DoChanged(Item: TStringGridColumn);
+    procedure DoChanged(Item: TCollectionItem);
   protected
     function GetItem(Index: Integer): TStringGridColumn;
     function GetOwner: TPersistent; override;
@@ -335,6 +345,7 @@ type
     FIncludeFixed: Boolean;
     FOddRowColor: TColor;
     FOverrideColumnColor: Boolean;
+    procedure Changed;
     function GetEvenRowColor: TColor;
     function GetOddRowColor: TColor;
     function IsEvenRowColorStored: Boolean;
@@ -347,6 +358,7 @@ type
   public
     constructor Create(AGrid: TStringGridEx);
     procedure Assign(Source: TPersistent); override;
+    procedure Reset;
   published
     property EvenRowColor: TColor read GetEvenRowColor write SetEvenRowColor
       stored IsEvenRowColorStored;
@@ -429,6 +441,8 @@ type
     FSelectionColor: TColor;
     FStretchModes: TStretchModes;
     FSyncColumns: Boolean;
+    function CalcCoordFromPoint(const X, Y: Integer;
+      const DrawInfo: TGridDrawInfo): TGridCoord;
     function CanColumnMove(const FromIndex, ToIndex: Integer): Boolean;
     function CanEdit: Boolean;
     procedure ChangeEditFormat(const ACol: Integer;
@@ -542,6 +556,9 @@ type
       const MergeText: Boolean = True; const MultiLine: Boolean = False);
     procedure MoveColumn(const FromIndex, ToIndex: Integer);
     procedure MoveRow(const FromIndex, ToIndex: Integer);
+    procedure ResetAllFonts(AFont: TFont = nil);
+    procedure ResetMainColors(const AGridColor: TColor = clWindow;
+      const AFixedColor: TColor = clBtnFace);
     procedure SetBounds(ALeft: Integer; ATop: Integer; AWidth: Integer;
       AHeight: Integer); override;
     procedure SetGradientColumnColors(const First, Last: TColor;
@@ -653,31 +670,27 @@ type
 
 procedure Register;
 
+resourcestring
+  DefStringGridErrorMsgPrefix =
+    'An error has occured:'#13#10#13#10;
+  DefStringGridErrorMsgSuffix =
+    #13#10#13#10'Contact your software supplier with above message.';
+
+var
+  StringGridErrorMsgPrefix: String = DefStringGridErrorMsgPrefix;
+  StringGridErrorMsgSuffix: String = DefStringGridErrorMsgSuffix;
+
 function SameFont(Font1, Font2: TFont): Boolean;
 
 implementation
 
 uses
-  Math, StdCtrls, Forms, Clipbrd;
+  Math, Clipbrd, Forms;
 
 procedure Register;
 begin
   RegisterComponents('Albert', [TStringGridEx]);
 end;
-
-const
-  sInvalidStringsOp =
-    'Cannot insert or delete within grid rows or columns this way';
-  sInvalidColumnOwnerType =
-    'Owner of Column has be of type TStringGridColumns';
-  sInvalidColumnOwner =
-    'Owner of Column has to be assigned';
-  sInvalidInsertIndex =
-    'Insertion index out of range';
-  sInvalidColumnMovement =
-    'Cannot move this column: index is out of range';
-  sInvalidClipboardFormat =
-    'Invalid clipboard format for InputStyle and EditMask properties';
 
 type
   TRGB = record
@@ -718,6 +731,31 @@ function SameFont(Font1, Font2: TFont): Boolean;
 begin
   Result := (Font1.Color = Font2.Color) and (Font1.Handle = Font2.Handle);
 end;
+
+{ EInvalidStringGridOperation }
+
+procedure EStringGridError.AfterConstruction;
+begin
+  inherited;
+  if not (csDesigning in Application.ComponentState) then
+    Message := StringGridErrorMsgPrefix + Message + StringGridErrorMsgSuffix;
+end;
+
+resourcestring
+  sErrGridMissing =
+    'Missing StringGrid for %s of %s "%s".';
+  sErrInvalidCollectionType =
+    'Invalid collection type %s for setting owner of %s.';
+  sErrColumnsMissing =
+    'Missing Columns collection for %s of %s "%s".';
+  sErrInvalidColumnMovement =
+    'Cannot move StringGridColumn %s to position %d: index is out of range.';
+  sErrInvalidStringsOperation =
+    'Cannot insert or delete within grid rows or columns this way.';
+  sErrInvalidClipboardFormat =
+    'Invalid clipboard format: InputStyle and/or EditMask do not correspond.';
+  sErrInvalidColumnInsertion =
+    'Cannot insert StringGridColumn: index %d is out of range.';
 
 { TStringGridTitle }
 
@@ -841,7 +879,12 @@ begin
   if Assigned(FGrid) then
     FGrid.RowHeights[0] := Value
   else
-    raise EInvalidGridOperation.Create(sInvalidColumnOwner);
+    if Assigned(FColumn) then
+      raise EStringGridError.CreateFmt(sErrGridMissing,
+        ['setting title height', FColumn.ClassName, FColumn.DisplayName])
+    else
+      raise EStringGridError.CreateFmt(sErrGridMissing,
+        ['setting height', ClassName, Caption]);
 end;
 
 procedure TStringGridTitle.SetMultiLine(const Value: Boolean);
@@ -894,14 +937,20 @@ begin
     end;
   end
   else
-    inherited Assign(Source); 
+    inherited Assign(Source);
 end;
 
 constructor TStringGridColumn.Create(Collection: TCollection);
+  function NewTitleCaption: String;
+  begin
+    Result := 'Column' + IntToStr(Index);
+  end;
 begin
   inherited Create(Collection);
   FColor := clDefault;
   FFont := TFont.Create;
+  FFont.OnChange := FontChanged;
+  FPickListItems := TStringList.Create;
   if Assigned(Collection) then
     if Collection is TStringGridColumns then
     begin
@@ -916,11 +965,10 @@ begin
       end;
     end
     else
-      raise EInvalidGridOperation.Create(sInvalidColumnOwnerType);
-  FFont.OnChange := FontChanged;
-  FPickListItems := TStringList.Create;
+      raise EStringGridError.CreateFmt(sErrInvalidCollectionType,
+        [Collection.ClassName, 'StringGridColumn ' + NewTitleCaption]);
   FTitle := TStringGridTitle.Create(Self);
-  FTitle.FCaption := 'Column' + IntToStr(Index);
+  FTitle.FCaption := NewTitleCaption;
 end;
 
 destructor TStringGridColumn.Destroy;
@@ -929,7 +977,7 @@ begin
   FPickListItems.Free;
   FTitle.Free;
   FFont.Free;
-  inherited Destroy; 
+  inherited Destroy;
 end;
 
 procedure TStringGridColumn.FontChanged(Sender: TObject);
@@ -1075,7 +1123,8 @@ begin
         False: FGrid.FixedCols := Index;
       end
     else
-      raise EInvalidGridOperation.Create(sInvalidColumnOwner);
+      raise EStringGridError.CreateFmt(sErrGridMissing,
+        ['setting fixation', ClassName, DisplayName]);
 end;
 
 procedure TStringGridColumn.SetFont(const Value: TFont);
@@ -1085,8 +1134,12 @@ end;
 
 procedure TStringGridColumn.SetIndex(Value: Integer);
 begin
-  if not (Value in [0..FColumns.Count -1]) then
-    raise EInvalidGridOperation.Create(sInvalidColumnMovement);
+  if not Assigned(FColumns) then
+    raise EStringGridError.CreateFmt(sErrColumnsMissing,
+      ['setting index', ClassName, DisplayName])
+  else if ((Value < 0) or (Value >= FColumns.Count)) then
+    raise EStringGridError.CreateFmt(sErrInvalidColumnMovement,
+      [DisplayName, Value]);
   FColumns.BeginUpdate;
   try
     if Assigned(FGrid) and (FGrid.FGridState = gsNormal) then
@@ -1195,7 +1248,8 @@ begin
       FColumns.DoChanged(Self);
     end
     else
-      raise EInvalidGridOperation.Create(sInvalidColumnOwner);
+      raise EStringGridError.CreateFmt(sErrGridMissing,
+        ['setting visibility', ClassName, DisplayName]);
 end;
 
 procedure TStringGridColumn.SetWidth(const Value: Integer);
@@ -1206,7 +1260,8 @@ begin
     FColumns.DoChanged(Self);
   end
   else
-    raise EInvalidGridOperation.Create(sInvalidColumnOwner);
+    raise EStringGridError.CreateFmt(sErrGridMissing,
+      ['setting width', ClassName, DisplayName]);
 end;
 
 { TStringGridColumns }
@@ -1217,10 +1272,10 @@ begin
   inherited Create(TStringGridColumn);
 end;
 
-procedure TStringGridColumns.DoChanged(Item: TStringGridColumn);
+procedure TStringGridColumns.DoChanged(Item: TCollectionItem);
 begin
   if Assigned(FOnChanged) then
-    FOnChanged(Self, Item);
+    FOnChanged(Self, TStringGridColumn(Item));
 end;
 
 function TStringGridColumns.GetItem(Index: Integer): TStringGridColumn;
@@ -1270,7 +1325,7 @@ begin
       FGrid.UpdateColumn(Item.Index)
     else
       FGrid.UpdateColumns;
-  DoChanged(TStringGridColumn(Item));
+  DoChanged(Item);
 end;
 
 { TStringGridStrings }
@@ -1353,7 +1408,7 @@ end;
 
 procedure TStringGridStrings.Delete(Index: Integer);
 begin
-  raise EInvalidGridOperation.Create(sInvalidStringsOp);
+  raise EStringGridError.Create(sErrInvalidStringsOperation);
 end;
 
 function TStringGridStrings.Get(Index: Integer): String;
@@ -1382,7 +1437,7 @@ end;
 
 procedure TStringGridStrings.Insert(Index: Integer; const S: String);
 begin
-  raise EInvalidGridOperation.Create(sInvalidStringsOp);
+  raise EStringGridError.Create(sErrInvalidStringsOperation);
 end;
 
 function TStringGridStrings.LinkGridCol(const AIndex: Integer): TStrings;
@@ -1442,13 +1497,17 @@ begin
     inherited Assign(Source);
 end;
 
+procedure TStringGridRowColors.Changed;
+begin
+  if Assigned(FGrid) then
+    FGrid.InvalidateGrid;
+end;
+
 constructor TStringGridRowColors.Create(AGrid: TStringGridEx);
 begin
   inherited Create;
   FGrid := AGrid;
-  FEvenRowColor := clDefault;
-  FOddRowColor := clDefault;
-  FOverrideColumnColor := True;
+  Reset;
 end;
 
 function TStringGridRowColors.GetEvenRowColor: TColor;
@@ -1483,12 +1542,21 @@ begin
     not FOverrideColumnColor;
 end;
 
+procedure TStringGridRowColors.Reset;
+begin
+  FIncludeFixed := False;
+  FOverrideColumnColor := True;
+  FEvenRowColor := clDefault;
+  FOddRowColor := clDefault;
+  Changed;
+end;
+
 procedure TStringGridRowColors.SetEvenRowColor(const Value: TColor);
 begin
   if FEvenRowColor <> Value then
   begin
     FEvenRowColor := Value;
-    FGrid.InvalidateGrid;
+    Changed;
   end;
 end;
 
@@ -1497,7 +1565,7 @@ begin
   if FIncludeFixed <> Value then
   begin
     FIncludeFixed := Value;
-    FGrid.InvalidateGrid;
+    Changed;
   end;
 end;
 
@@ -1506,7 +1574,7 @@ begin
   if FOddRowColor <> Value then
   begin
     FOddRowColor := Value;
-    FGrid.InvalidateGrid;
+    Changed;
   end;
 end;
 
@@ -1516,7 +1584,7 @@ begin
   if FOverrideColumnColor <> Value then
   begin
     FOverrideColumnColor := Value;
-    FGrid.InvalidateGrid;
+    Changed;
   end;
 end;
 
@@ -1582,18 +1650,19 @@ begin
         StrToInt(Clipboard.AsText);
       isAbsInteger:
         if StrToInt(Clipboard.AsText) < 0 then
-          raise Exception.Create(sInvalidClipboardFormat);
+          raise EStringGridError.Create(sErrInvalidClipboardFormat);
       isFloat:
         StrToFloat(Clipboard.AsText);
       isAbsFloat:
         if StrToFloat(Clipboard.AsText) < 0 then
-          raise Exception.Create(sInvalidClipboardFormat);
+          raise EStringGridError.Create(sErrInvalidClipboardFormat);
       isMask:
         if not Validate(Clipboard.AsText, MaskErrorPos) then
-          raise Exception.Create(sInvalidClipboardFormat);
+          raise EStringGridError.Create(sErrInvalidClipboardFormat);
     end;
   except
     Clipboard.Close;
+    MessageBeep(0);
     Exit;
   end;
   Clipboard.Close;
@@ -1656,17 +1725,58 @@ procedure TStringGridEx.AdjustSize;
 begin
   //TCustomGrid.AdjustSize is obsolete and has wrong result for this
   //descendant. Instead, use the methods DeleteColumn, DeleteRows,
-  //InsertColumn and InsertRow, which take care of Merged Cells.
+  //InsertColumn and InsertRow, which take care of possible Merged Cells.
+end;
+
+function TStringGridEx.CalcCoordFromPoint(const X, Y: Integer;
+  const DrawInfo: TGridDrawInfo): TGridCoord;
+
+  function DoCalc(const AxisInfo: TGridAxisDrawInfo; const N: Integer): Integer;
+  var
+    i: Integer;
+    Start: Integer;
+    Stop: Integer;
+    Line: Integer;
+  begin
+    with AxisInfo do
+    begin
+      if N < FixedBoundary then
+      begin
+        Start := 0;
+        Stop :=  FixedCellCount - 1;
+        Line := 0;
+      end
+      else
+      begin
+        Start := FirstGridCell;
+        Stop := GridCellCount - 1;
+        Line := FixedBoundary;
+      end;
+      Result := -1;
+      for i := Start to Stop do
+      begin
+        Inc(Line, GetExtent(i) + EffectiveLineWidth);
+        if N < Line then
+        begin
+          Result := i;
+          Exit;
+        end;
+      end;
+    end;
+  end;
+
+begin
+  Result.X := DoCalc(DrawInfo.Horz, X);
+  Result.Y := DoCalc(DrawInfo.Vert, Y);
 end;
 
 function TStringGridEx.CanColumnMove(const FromIndex,
   ToIndex: Integer): Boolean;
 begin
-  Result := (FromIndex in [0..ColCount - 1]) and
-    (ToIndex in [0..ColCount - 1]);
-  if not SyncColumns then
-    Result := Result and
-              (Columns.UpdateCount > 0) or
+  Result := (FromIndex >= 0) and (FromIndex < ColCount) and
+    (ToIndex >= 0) and (ToIndex < ColCount);
+  if Result and not SyncColumns then
+    Result := (Columns.UpdateCount > 0) or
               ((FromIndex >= Columns.Count) and (ToIndex >= Columns.Count)) or
                 ((FromIndex < Columns.Count) and (ToIndex < Columns.Count));
 end;
@@ -1726,14 +1836,14 @@ procedure TStringGridEx.ChangeEditFormat(const ACol: Integer;
 var
   iRow: Integer;
 begin
-  for iRow := 0 to (RowCount - 1) do
-    with FCellData[ACol, iRow] do
-      if FString <> '' then
-        try
-          if Format(OldFormat, [FValue]) = FString then
+  try
+    for iRow := 0 to (RowCount - 1) do
+      with FCellData[ACol, iRow] do
+        if FString <> '' then
+          if FString = Format(OldFormat, [FValue]) then
             FString := Format(NewFormat, [FValue]);
-        except
-        end;
+  except
+  end;
 end;
 
 function TStringGridEx.CheckColumnDrag(var Origin, Destination: Integer;
@@ -1978,7 +2088,7 @@ function TStringGridEx.GetCellColor(const ACol, ARow: Integer;
 var
   DrawRowColor: Boolean;
 begin
-  if CellData.FReadOnly then
+  if CellData.FReadOnly and not (gdFixed in AState) then
     Result := ReadOnlyColor
   else
   begin
@@ -2210,8 +2320,8 @@ end;
 
 procedure TStringGridEx.InsertColumn(const AtIndex: Integer);
 begin
-  if not (AtIndex in [0..ColCount - 1]) then
-    raise EInvalidGridOperation.Create(sInvalidInsertIndex);
+  if ((AtIndex < 0) or (AtIndex > ColCount)) then
+    raise EStringGridError.CreateFmt(sErrInvalidColumnInsertion, [AtIndex]);
   if AtIndex > Columns.Count then
   begin
     ColCount := ColCount + 1;
@@ -2224,7 +2334,7 @@ begin
     FixedCols := FixedCols + 1;
 end;
 
-procedure TStringGridEx.InsertColumn(const Position: TInsertPos);
+procedure TStringGridEx.InsertColumn(const Position: TInsertPos = ipBefore);
 begin
   case Position of
     ipBefore: InsertColumn(Col);
@@ -2243,7 +2353,7 @@ begin
     FixedRows := FixedRows + 1;
 end;
 
-procedure TStringGridEx.InsertRow(const Position: TInsertPos);
+procedure TStringGridEx.InsertRow(const Position: TInsertPos = ipBefore);
 begin
   case Position of
     ipBefore: InsertRow(Row);
@@ -2316,21 +2426,25 @@ begin
   //What has TCustomGrid.Paint to do with drawing temporarily XOR-lines when
   //moving column or row???? I'm almost sure that TCustomGrid.Paint isn't the
   //full or final code which grids.dcu uses. For example: note the UpdateRect
-  //variable which is never used.
+  //variable in TCustomGrid.Paint which is never used.
   //We once use inherited Paint to wake up XorPainting for column- and
   //rowdragging, which strangely seems to work fine:
   inherited Paint;
 end;
 
-(** Storage of Mergings in FCellData ***********************
-    0      1      2      3      4      5      6      7
-    --------------------------------------------------------
-0  |
-1  |              5,3    2,1    2,1    2,1
-2  |              2,1    2,1    2,1    2,1
-3  |              2,1    2,1    2,1    2,1
-4  |
-************************************************************)
+//////////////////////////////////////////////////////////////////////////////
+//                                                                          //
+// Explanation of merging storage in FCellData:                             //
+//                                                                          //
+//      0      1      2      3      4      5      6      7                  //
+//      --------------------------------------------------------            //
+//  0  |                                                                    //
+//  1  |              5,3    2,1    2,1    2,1                              //
+//  2  |              2,1    2,1    2,1    2,1                              //
+//  3  |              2,1    2,1    2,1    2,1                              //
+//  4  |                                                                    //
+//                                                                          //
+//////////////////////////////////////////////////////////////////////////////
 
 procedure TStringGridEx.MergeCell(const ACol, ARow: Integer;
   const MergeCoord: TGridCoord; const MergeText, MultiLine: Boolean);
@@ -2369,9 +2483,18 @@ end;
 
 procedure TStringGridEx.MouseDown(Button: TMouseButton; Shift: TShiftState;
   X, Y: Integer);
+var
+  DrawInfo: TGridDrawInfo;
+  Coord: TGridCoord;
 begin
-  FLastClickColumnIndex := MouseCoord(X, Y).X;
-  inherited;
+  CalcDrawInfo(DrawInfo);
+  Coord := CalcCoordFromPoint(X, Y, DrawInfo);
+  FLastClickColumnIndex := Coord.X;
+  //Thanks to: http://www.nldelphi.com/Forum/showthread.php?t=20027
+  //To prevent too much scrolling if last row is half shown:
+  if Coord.Y = DrawInfo.Vert.LastFullVisibleCell + 1 then
+    PostMessage(Handle, WM_CANCELMODE, 0, 0);
+  inherited MouseDown(Button, Shift, X, Y);
 end;
 
 procedure TStringGridEx.MouseUp(Button: TMouseButton; Shift: TShiftState;
@@ -2401,11 +2524,18 @@ end;
 procedure TStringGridEx.MoveColumn(const FromIndex, ToIndex: Integer);
 begin
   if not CanColumnMove(FromIndex, ToIndex) then
-    raise EInvalidGridOperation.Create(sInvalidColumnMovement)
+  begin
+    if FromIndex < FColumns.Count then
+      raise EStringGridError.CreateFmt(sErrInvalidColumnMovement,
+        [FColumns[FromIndex].DisplayName, ToIndex])
+    else
+      raise EStringGridError.CreateFmt(sErrInvalidColumnMovement,
+        [IntToStr(FromIndex), ToIndex]);
+  end
   else
     if FGridState = gsNormal then
     begin
-      //to prevent circular calls to Columns[*].SetIndex due to ColumnMoved:
+      //To prevent circular calls to Columns[*].SetIndex due to ColumnMoved:
       FGridState := gsColMoving;
       try
         inherited MoveColumn(FromIndex, ToIndex);
@@ -2795,7 +2925,7 @@ begin
     DrawCells(Max(LeftCol, Left), Max(TopRow, Top),
       Min(Horz.LastFullVisibleCell + 1, Right),
       Min(Vert.LastFullVisibleCell + 1, Bottom), []);
-  end; 
+  end;
 
   if ddBackGround in DefaultDrawing then
     with DrawInfo, Canvas do
@@ -2812,7 +2942,46 @@ begin
         FillRect(Rect(0, Vert.GridBoundary, Horz.GridExtent, Vert.GridExtent));
       end;
     end;
-end;  
+end;
+
+procedure TStringGridEx.ResetAllFonts(AFont: TFont = nil);
+var
+  i: Integer;
+begin
+  if AFont = nil then
+    ParentFont := True
+  else
+    Font.Assign(AFont);
+  FixedFont.Assign(Font);
+  for i := 0 to (Columns.Count - 1) do
+    with Columns[i] do
+    begin
+      if not SameFont(Font, Self.Font) then
+        Font.Assign(Self.Font);
+      if not SameFont(Title.Font, FixedFont) then
+        Title.Font.Assign(FixedFont);
+    end;
+end;
+
+procedure TStringGridEx.ResetMainColors(const AGridColor: TColor = clWindow;
+  const AFixedColor: TColor = clBtnFace);
+var
+  i: Integer;
+begin
+  Color := AGridColor;
+  FixedColor := AFixedColor;
+  AlternatingRowColors.Reset;
+  Columns.BeginUpdate;
+  try
+    for i := 0 to (Columns.Count - 1) do
+    begin
+      Columns[i].Color := clDefault;
+      Columns[i].Title.Color := clDefault;
+    end;
+  finally;
+    Columns.EndUpdate;
+  end;
+end;
 
 procedure TStringGridEx.RowMoved(FromIndex, ToIndex: Integer);
 var
@@ -2850,9 +3019,15 @@ end;
 
 procedure TStringGridEx.SetCells(ACol, ARow: Integer; const Value: String);
 begin
+  //Reason to not store directly in FCellData[ACol, ARow].FString:
+  // 1: Value could be bound by the InputStyle of Columns[ARow],
+  //so we pass Value to SetCellValue, which checks Value for correct
+  //InputStyle and finaly stores Value in FCellData.FString
+  //See also TStringGridEx.SetValues().
   if InGrid(ACol, ARow, True) then
   begin
-    FCellData[ACol, ARow].FString := Value;
+    //FCellData[ACol, ARow].FString := Value;
+    SetCellValue(ACol, ARow, Value);
     InvalidateCell(ACol, ARow);
   end;
 end;
@@ -2871,17 +3046,16 @@ procedure TStringGridEx.SetCellValue(const ACol, ARow: Integer;
   const Value: String);
 const
   SErrString = 'Wrong EditFormat value for text: ''%s''';
-  SErrNumber = 'Wrong EditFormat value for number: ''%d''';
+  SErrNumber = 'Wrong EditFormat value for number: ''%f''';
   SErrIntVal = 'EditFormat requires a whole number for: ''%s''';
   SErrAbsIntVal = 'EditFormat requires an absolute whole number for: ''%s''';
   SErrFloatVal = 'EditFormat requires a number for: ''%s''';
   SErrAbsFloatVal = 'EditFormat requires an absolute number for: ''%s''';
 begin
-  if not Assigned(Columns[ACol]) then
-  try
+  if (not Assigned(Columns[ACol])) or (Value = '') then
+  begin
     FCellData[ACol, ARow].FString := Value;
     FCellData[ACol, ARow].FValue := StrToFloatDef(Value, 0.0);
-  except
   end
   else
     with Columns[ACol], FCellData[ACol, ARow] do
@@ -2915,7 +3089,7 @@ begin
           end;
         isMask:
           try
-            FValue := StrToFloat(InplaceEditor.Text);
+            FValue := StrToFloat(FormatMaskText(EditMask, Value));
           except
           end;
       end;
@@ -2926,14 +3100,23 @@ begin
           except
             raise EConvertError.CreateFmt(SErrString, [Value]);
           end;
-        isInteger..isAbsFloat:
+        isInteger..isAbsInteger:
+          try
+            FString := Format(EditFormat, [Round(FValue)]);
+          except
+            raise EConvertError.CreateFmt(SErrNumber, [Round(FValue)]);
+          end;
+        isFloat..isAbsFloat:
           try
             FString := Format(EditFormat, [FValue]);
           except
             raise EConvertError.CreateFmt(SErrNumber, [FValue]);
           end;
         isMask:
-          FString := InplaceEditor.EditText;
+          try
+            FString := FormatMaskText(EditMask, Value);
+          except
+          end;
       end;
     end;
 end;
@@ -3170,8 +3353,15 @@ end;
 
 procedure TStringGridEx.SetValues(ACol, ARow: Integer; const Value: Double);
 begin
+  //Reasons to not store directly in FCellData[ACol, ARow].FValue:
+  // 1: For representating Value as string in the cell, we convert to String,
+  // 2: Value could be bound by the InputStyle of Columns[ARow],
+  //so we pass Value as string to SetCellValue, which checks Value for correct
+  //InputStyle and finaly stores Value in FCellData.FValue
+  //See also TStringGridEx.SetCells().
   if InGrid(ACol, ARow, True) then
   begin
+    //FCellData[ACol, ARow].FValue :=Value;
     SetCellValue(ACol, ARow, FloatToStr(Value));
     InvalidateCell(ACol, ARow);
   end;
@@ -3268,9 +3458,6 @@ end;
 
 procedure TStringGridEx.WMEraseBkgnd(var Message: TWmEraseBkgnd);
 begin
-  if FGridState in [gsColMoving, gsRowMoving] then
-    with TForm(Owner) do
-      Caption := Caption + 'E';
   if ddBackground in DefaultDrawing then
     Message.Result := 1
   else
