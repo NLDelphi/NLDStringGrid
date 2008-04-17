@@ -181,7 +181,6 @@ type
     procedure           SetEditText             (ACol, ARow: Longint; const Value: string); override;
     procedure           SizeChanged             (OldColCount, OldRowCount: longint); override;
     procedure           StretchRightCol         ;
-    procedure           WMSize(var Msg:TWMKey); message WM_CHAR;
     property            Combobox                : TNLDInplaceComboBox    read FComboBox;
   public
     constructor         Create                  (AOwner: TComponent); override;
@@ -1598,11 +1597,6 @@ begin
   inherited;
   if FStretchRight then
     StretchRightCol;
-end;
-
-procedure TNLDStringGrid.WMSize(var Msg: TWMKey);
-begin
-
 end;
 
 end.
