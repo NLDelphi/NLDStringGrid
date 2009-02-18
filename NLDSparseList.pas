@@ -353,20 +353,24 @@ var
 begin
   if Index < 0 then
     TList.Error(SListIndexError, Index);
-  CheckCapacity(Index + 1);
-  SectionIndex := Index shr SectionShift[FQuota];
-  if SectionIndex >= FSectionCount then
-    P := nil
-  else
-  begin
-    P := FSections^[SectionIndex];
-    if P <> nil then
-      Inc(P, (Index and IndexMask[FQuota]) * SizeOf(Pointer));
-  end;
-  if P = nil then
+  if Index >= Capacity then
     Result := nil
   else
-    Result := PPointer(P)^;
+  begin
+    SectionIndex := Index shr SectionShift[FQuota];
+    if SectionIndex >= FSectionCount then
+      P := nil
+    else
+    begin
+      P := FSections^[SectionIndex];
+      if P <> nil then
+        Inc(P, (Index and IndexMask[FQuota]) * SizeOf(Pointer));
+    end;
+    if P = nil then
+      Result := nil
+    else
+      Result := PPointer(P)^;
+  end;
 end;
 
 function TCustomSparseList.Grow: Boolean;
