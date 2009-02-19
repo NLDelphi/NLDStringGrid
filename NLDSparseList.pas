@@ -188,7 +188,7 @@ end;
 
 procedure TCustomSparseList.CheckCapacity(const ACapacity: Integer);
 begin
-  while (ACapacity > Capacity) and FAutoGrow and Grow do;
+  while FAutoGrow and (ACapacity > Capacity) and Grow do;
   if ACapacity > Capacity then
     TList.Error(SListCapacityError, ACapacity);
 end;
