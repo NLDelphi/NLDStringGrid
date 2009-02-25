@@ -10,8 +10,8 @@
 { *************************************************************************** }
 {                                                                             }
 { Last edit by: Albert de Weerd                                               }
-{ Date: February 18, 2009                                                     }
-{ Version: 2.0.0.0                                                            }
+{ Date: February 25, 2009                                                     }
+{ Version: 2.0.0.1                                                            }
 {                                                                             }
 { *************************************************************************** }
 
@@ -28,7 +28,10 @@ const
   MaxSectionCount = 4096;
 
 type
-  TProcessItem = function(const Index: Integer; Item: Pointer): Integer;
+  TPointerArray = array of Pointer;
+
+  TProcessListItem = function(const Index: Integer; Item: Pointer): Integer;
+  TProcessMatrixItem = function(const X, Y: Integer; Item: Pointer): Integer;
   { Must return 0 if successfull }
   { Item is guaranteed non-nil }
 
@@ -41,7 +44,7 @@ type
   PSections = ^TSections;
   TSections = array[0..MaxSectionCount - 1] of Pointer;
 
-  TCustomSparseList = class(TObject)
+  TSparseList = class(TObject)
   private
     FSections: PSections;
     FCount: Integer;
@@ -61,10 +64,11 @@ type
     property Quota: TListQuota read FQuota write SetQuota;
   public
     function Add(Item: Pointer): Integer; overload;
+    procedure Add(Items: TPointerArray); overload;
     procedure Add(AList: TList); overload;
     procedure Assign(Source: TObject);
     function Capacity: Integer;
-    procedure Clear;
+    procedure Clear; virtual;
     constructor Create(const AAutoGrow: Boolean = True;
       const AQuota: TListQuota = lqSmall);
     procedure Delete(const Index: Integer);
@@ -73,8 +77,8 @@ type
     function Extract(const Index: Integer): Pointer; overload;
     function Extract(Item: Pointer): Pointer; overload;
     function First: Pointer;
-    function ForAll(ProcessItemFunc: TProcessItem;
-      const Down: Boolean): Integer;
+    function ForAll(ProcessItemFunc: TProcessListItem;
+      const Descending: Boolean): Integer;
     function Grow: Boolean;
     function IndexOf(Item: Pointer): Integer;
     procedure Insert(const Index: Integer; Item: Pointer);
@@ -85,79 +89,83 @@ type
     property Items[const Index: Integer]: Pointer read Get write Put; default;
   end;
 
-  TSparseList = class(TCustomSparseList)
-  public
-    property AutoGrow;
-    property Quota;
-  end;
-
-  TCustomSparseMatrix = class(TObject)
+  TSparseMatrix = class(TObject)
   private
-    FLists: TCustomSparseList;
-    FAutoGrow2: Boolean;
-    FQuota2: TListQuota;
-    function GetAutoGrow1: Boolean;
-    function GetItem(const Index1, Index2: Integer): Pointer;
-    function GetList(const Index: Integer): TCustomSparseList;
-    function GetQuota1: TListQuota;
-    procedure SetAutoGrow1(const Value: Boolean);
-    procedure SetAutoGrow2(const Value: Boolean);
-    procedure SetItem(const Index1, Index2: Integer; const Item: Pointer);
-    procedure SetList(const Index: Integer; const List: TCustomSparseList);
-    procedure SetQuota1(const Value: TListQuota);
-    procedure SetQuota2(const Value: TListQuota);
+    FRows: TSparseList;
+    FAutoGrowX: Boolean;
+    FQuotaX: TListQuota;
+    function GetAutoGrowY: Boolean;
+    function GetItem(const X, Y: Integer): Pointer;
+    function GetQuotaY: TListQuota;
+    function GetRow(const Y: Integer): TSparseList;
+    function GetRowCount: Integer;
+    procedure SetAutoGrowX(const Value: Boolean);
+    procedure SetAutoGrowY(const Value: Boolean);
+    procedure SetItem(const X, Y: Integer; const Item: Pointer);
+    procedure SetQuotaX(const Value: TListQuota);
+    procedure SetQuotaY(const Value: TListQuota);
+    procedure SetRow(const Y: Integer; const Row: TSparseList);
+    procedure SetRowCount(const Value: Integer);
   protected
-    property AutoGrow1: Boolean read GetAutoGrow1 write SetAutoGrow1;
-    property AutoGrow2: Boolean read FAutoGrow2 write SetAutoGrow2;
-    property Lists[const Index: Integer]: TCustomSparseList read GetList
-      write SetList;
-    property Quota1: TListQuota read GetQuota1 write SetQuota1;
-    property Quota2: TListQuota read FQuota2 write SetQuota2;
+    property AutoGrowX: Boolean read FAutoGrowX write SetAutoGrowX;
+    property AutoGrowY: Boolean read GetAutoGrowY write SetAutoGrowY;
+    property QuotaX: TListQuota read FQuotaX write SetQuotaX;
+    property QuotaY: TListQuota read GetQuotaY write SetQuotaY;
   public
     procedure Clear;
-    constructor Create(const AAutoGrow: Boolean = True;
+    constructor Create(const AutoGrow: Boolean = True;
       const AQuota: TListQuota = lqSmall);
     destructor Destroy; override;
-    property Items[const Index1, Index2: Integer]: Pointer read GetItem
+    function ForAllItems(ProcessItemFunc: TProcessMatrixItem;
+      const Descending: Boolean): Integer;
+    function ForAllRows(ProcessListFunc: TProcessListItem;
+      const Descending: Boolean): Integer;
+    procedure MoveCol(const CurIndex, NewIndex: Integer);
+    procedure MoveRow(const CurIndex, NewIndex: Integer);
+    property Items[const X, Y: Integer]: Pointer read GetItem
       write SetItem; default;
-  end;
-
-  TSparseMatrix = class(TCustomSparseMatrix)
-  public
-    property AutoGrow1;
-    property AutoGrow2;
-    property Quota1;
-    property Quota2;
+    property RowCount: Integer read GetRowCount write SetRowCount;
+    property Rows[const Y: Integer]: TSparseList read GetRow write SetRow;
   end;
 
 implementation
 
-{ TCustomSparseList }
+{ TSparseList }
 
 const
   IndexMask: array[TListQuota] of Word = (15, 255, 4095, 65535);
   SectionShift: array[TListQuota] of Byte = (4, 8, 12, 16);
   SectionSize: array[TListQuota] of Cardinal = (16, 256, 4096, 65536);
 
-function TCustomSparseList.Add(Item: Pointer): Integer;
+function TSparseList.Add(Item: Pointer): Integer;
 begin
   Result := FCount;
   Put(FCount, Item);
 end;
 
-procedure TCustomSparseList.Add(AList: TList);
+procedure TSparseList.Add(Items: TPointerArray);
 var
   StartFrom: Integer;
   i: Integer;
 begin
-  CheckCapacity(FCount + AList.Count);
+  StartFrom := FCount;
+  for i := Length(Items) - 1 to 0 do
+    if Items[i] <> nil then
+      Put(StartFrom + i, Items[i]);
+end;
+
+procedure TSparseList.Add(AList: TList);
+var
+  StartFrom: Integer;
+  i: Integer;
+begin
   StartFrom := FCount;
   for i := AList.Count - 1 to 0 do
     if AList[i] <> nil then
       Put(StartFrom + i, AList[i]);
 end;
 
-procedure TCustomSparseList.Assign(Source: TObject);
+procedure TSparseList.Assign(Source: TObject);
 
   function PutItem(const Index: Integer; Item: Pointer): Integer;
   begin
@@ -166,13 +174,13 @@ procedure TCustomSparseList.Assign(Source: TObject);
   end;
 
 begin
-  if Source is TCustomSparseList then
+  if Source is TSparseList then
   begin
-    CheckCapacity(TCustomSparseList(Source).Capacity);
+    CheckCapacity(TSparseList(Source).Capacity);
     Clear;
-    SetSectionCount(TCustomSparseList(Source).FSectionCount);
-    FCount := TCustomSparseList(Source).Count;
-    TCustomSparseList(Source).ForAll(@PutItem, False);
+    SetSectionCount(TSparseList(Source).FSectionCount);
+    FCount := TSparseList(Source).Count;
+    TSparseList(Source).ForAll(@PutItem, False);
   end
   else if Source is TList then
   begin
@@ -181,25 +189,25 @@ begin
   end;
 end;
 
-function TCustomSparseList.Capacity: Integer;
+function TSparseList.Capacity: Integer;
 begin
   Result := MaxSectionCount * SectionSize[FQuota];
 end;
 
-procedure TCustomSparseList.CheckCapacity(const ACapacity: Integer);
+procedure TSparseList.CheckCapacity(const ACapacity: Integer);
 begin
   while FAutoGrow and (ACapacity > Capacity) and Grow do;
   if ACapacity > Capacity then
     TList.Error(SListCapacityError, ACapacity);
 end;
 
-procedure TCustomSparseList.Clear;
+procedure TSparseList.Clear;
 begin
   FCount := 0;
   SetSectionCount(0);
 end;
 
-constructor TCustomSparseList.Create(const AAutoGrow: Boolean = True;
+constructor TSparseList.Create(const AAutoGrow: Boolean = True;
   const AQuota: TListQuota = lqSmall);
 begin
   inherited Create;
@@ -207,7 +215,7 @@ begin
   FQuota := AQuota;
 end;
 
-function TCustomSparseList.CreateSection(const SectionIndex: Word): Pointer;
+function TSparseList.CreateSection(const SectionIndex: Word): Pointer;
 var
   Size: Cardinal;
 begin
@@ -216,7 +224,7 @@ begin
   FillChar(Result^, Size, 0);
 end;
 
-procedure TCustomSparseList.Delete(const Index: Integer);
+procedure TSparseList.Delete(const Index: Integer);
 var
   i: Integer;
 begin
@@ -232,13 +240,13 @@ begin
     end;
 end;
 
-destructor TCustomSparseList.Destroy;
+destructor TSparseList.Destroy;
 begin
   Clear;
   inherited Destroy;
 end;
 
-procedure TCustomSparseList.Exchange(const Index1, Index2: Integer);
+procedure TSparseList.Exchange(const Index1, Index2: Integer);
 var
   Temp: Pointer;
 begin
@@ -247,7 +255,7 @@ begin
   Put(Index2, Temp);
 end;
 
-function TCustomSparseList.Extract(const Index: Integer): Pointer;
+function TSparseList.Extract(const Index: Integer): Pointer;
 begin
   if (Index < 0) or (Index >= FCount) then
     Result := nil
@@ -258,18 +266,18 @@ begin
   end;
 end;
 
-function TCustomSparseList.Extract(Item: Pointer): Pointer;
+function TSparseList.Extract(Item: Pointer): Pointer;
 begin
   Result := Extract(IndexOf(Item));
 end;
 
-function TCustomSparseList.First: Pointer;
+function TSparseList.First: Pointer;
 begin
   Result := Get(0);
 end;
 
-function TCustomSparseList.ForAll(ProcessItemFunc: TProcessItem;
-  const Down: Boolean): Integer;
+function TSparseList.ForAll(ProcessItemFunc: TProcessListItem;
+  const Descending: Boolean): Integer;
 { Asm code taken from Grids.TSparsePointerArray.ForAll }
 var
   CallerBP: Cardinal;
@@ -279,14 +287,14 @@ var
   iItem: Word;
   Item: Pointer;
 begin
-  if FCount <= 0 then
+  if FSectionCount = 0 then
     Exit;
   Result := 0;
   asm
     mov   eax,[ebp]
     mov   CallerBP,eax
   end;
-  if Down then
+  if Descending then
     for iSection := FSectionCount - 1 downto 0 do
     begin
       P := FSections^[iSection];
@@ -346,7 +354,7 @@ begin
     end;
 end;
 
-function TCustomSparseList.Get(const Index: Integer): Pointer;
+function TSparseList.Get(const Index: Integer): Pointer;
 var
   SectionIndex: Word;
   P: PChar;
@@ -373,14 +381,14 @@ begin
   end;
 end;
 
-function TCustomSparseList.Grow: Boolean;
+function TSparseList.Grow: Boolean;
 begin
   Result := FQuota < High(TListQuota);
   if Result then
     SetQuota(Succ(FQuota));
 end;
 
-function TCustomSparseList.IndexOf(Item: Pointer): Integer;
+function TSparseList.IndexOf(Item: Pointer): Integer;
 begin
   Result := 0;
   while (Result < FCount) and (Get(Result) <> Item) do
@@ -389,7 +397,7 @@ begin
     Result := -1;
 end;
 
-procedure TCustomSparseList.Insert(const Index: Integer; Item: Pointer);
+procedure TSparseList.Insert(const Index: Integer; Item: Pointer);
 var
   i: Integer;
 begin
@@ -402,12 +410,12 @@ begin
   Put(Index, Item);
 end;
 
-function TCustomSparseList.Last: Pointer;
+function TSparseList.Last: Pointer;
 begin
   Result := Get(FCount - 1);
 end;
 
-procedure TCustomSparseList.Move(const CurIndex, NewIndex: Integer);
+procedure TSparseList.Move(const CurIndex, NewIndex: Integer);
 var
   Temp: Pointer;
 begin
@@ -419,7 +427,7 @@ begin
   end;
 end;
 
-procedure TCustomSparseList.Pack;
+procedure TSparseList.Pack;
 var
   i: Integer;
 begin
@@ -428,15 +436,16 @@ begin
       Delete(i);
 end;
 
-procedure TCustomSparseList.Put(const Index: Integer; Item: Pointer);
+procedure TSparseList.Put(const Index: Integer; Item: Pointer);
 var
   SectionIndex: Word;
   P: PChar;
 begin
   if Index < 0 then
     TList.Error(SListIndexError, Index);
-  CheckCapacity(Index + 1);
-  if (Item <> nil) or (Get(Index) <> nil) then
+  if Index >= FCount then
+    CheckCapacity(Index + 1);
+  if (Item <> nil) or ((Index < FCount) and (Get(Index) <> nil)) then
   begin
     SectionIndex := Index shr SectionShift[FQuota];
     if SectionIndex >= FSectionCount then
@@ -460,7 +469,7 @@ begin
   end;
 end;
 
-procedure TCustomSparseList.Recount;
+procedure TSparseList.Recount;
 
   function ResetCount(const Index: Integer; Item: Pointer): Integer;
   begin
@@ -473,7 +482,7 @@ begin
   ForAll(@ResetCount, True);
 end;
 
-procedure TCustomSparseList.SetCount(const ACount: Integer);
+procedure TSparseList.SetCount(const ACount: Integer);
 var
   i: Integer;
 begin
@@ -488,13 +497,13 @@ begin
   end;
 end;
 
-procedure TCustomSparseList.SetQuota(const AQuota: TListQuota);
+procedure TSparseList.SetQuota(const AQuota: TListQuota);
 var
-  Temp: TCustomSparseList;
+  Temp: TSparseList;
 begin
   if FQuota <> AQuota then
   begin
-    Temp := TCustomSparseList.Create(False, AQuota);
+    Temp := TSparseList.Create(False, AQuota);
     try
       Temp.Assign(Self);
       Clear;
@@ -511,7 +520,7 @@ begin
   end;
 end;
 
-procedure TCustomSparseList.SetSectionCount(const NewSectionCount: Word);
+procedure TSparseList.SetSectionCount(const NewSectionCount: Word);
 var
   i: Integer;
 begin
@@ -532,125 +541,187 @@ begin
   end;
 end;
 
-{ TCustomSparseMatrix }
+{ TSparseMatrix }
 
-procedure TCustomSparseMatrix.Clear;
-
-  function FreeList(const Index: Integer; List: TCustomSparseList): Integer;
-  begin
-    List.Free;
-    Result := 0;
-  end;
-
+procedure TSparseMatrix.Clear;
 begin
-  FLists.ForAll(@FreeList, False);
-  FLists.Clear;
+  SetRowCount(0);
 end;
 
-constructor TCustomSparseMatrix.Create(const AAutoGrow: Boolean = True;
+constructor TSparseMatrix.Create(const AutoGrow: Boolean = True;
   const AQuota: TListQuota = lqSmall);
 begin
   inherited Create;
-  FLists := TCustomSparseList.Create(AAutoGrow, AQuota);
-  FAutoGrow2 := AAutoGrow;
-  FQuota2 := AQuota;
+  FRows := TSparseList.Create(AutoGrow, AQuota);
+  FAutoGrowX := AutoGrow;
+  FQuotaX := AQuota;
 end;
 
-destructor TCustomSparseMatrix.Destroy;
+destructor TSparseMatrix.Destroy;
 begin
   Clear;
-  FLists.Free;
+  FRows.Free;
   inherited Destroy;
 end;
 
-function TCustomSparseMatrix.GetAutoGrow1: Boolean;
+function TSparseMatrix.ForAllItems(ProcessItemFunc: TProcessMatrixItem;
+  const Descending: Boolean): Integer;
+var
+  YY: Integer;
+
+  function ProcessItem(const X: Integer; Item: Pointer): Integer;
+  begin
+    Result := ProcessItemFunc(X, YY, Item);
+  end;
+
+  function ProcessRow(const Y: Integer; Row: TSparseList): Integer;
+  begin
+    YY := Y;
+    Result := Row.ForAll(@ProcessItem, Descending);
+  end;
+
 begin
-  Result := FLists.AutoGrow;
+  Result := FRows.ForAll(@ProcessRow, Descending);
 end;
 
-function TCustomSparseMatrix.GetItem(const Index1, Index2: Integer): Pointer;
-var
-  List: TCustomSparseList;
+function TSparseMatrix.ForAllRows(ProcessListFunc: TProcessListItem;
+  const Descending: Boolean): Integer;
+
+  function ProcessRow(Y: Integer; Row: TSparseList): Integer;
+  begin
+    Result := ProcessListFunc(Y, Row);
+  end;
+
 begin
-  List := FLists[Index1];
-  if List = nil then
+  Result := FRows.ForAll(@ProcessRow, Descending);
+end;
+
+function TSparseMatrix.GetAutoGrowY: Boolean;
+begin
+  Result := FRows.AutoGrow;
+end;
+
+function TSparseMatrix.GetItem(const X, Y: Integer): Pointer;
+var
+  Row: TSparseList;
+begin
+  Row := FRows[Y];
+  if Row = nil then
     Result := nil
   else
-    Result := List[Index2];
+    Result := Row[X];
 end;
 
-function TCustomSparseMatrix.GetList(const Index: Integer): TCustomSparseList;
+function TSparseMatrix.GetQuotaY: TListQuota;
 begin
-  Result := FLists[Index];
+  Result := FRows.Quota;
 end;
 
-function TCustomSparseMatrix.GetQuota1: TListQuota;
+function TSparseMatrix.GetRow(const Y: Integer): TSparseList;
 begin
-  Result := FLists.Quota;
+  Result := FRows[Y];
 end;
 
-procedure TCustomSparseMatrix.SetAutoGrow1(const Value: Boolean);
+function TSparseMatrix.GetRowCount: Integer;
 begin
-  FLists.AutoGrow := Value;
+  Result := FRows.Count;
 end;
 
-procedure TCustomSparseMatrix.SetAutoGrow2(const Value: Boolean);
+procedure TSparseMatrix.MoveCol(const CurIndex, NewIndex: Integer);
 
-  function SetAutoGrow(const Index: Integer; List: TCustomSparseList): Integer;
+  function MoveInRow(Y: Integer; Row: TSparseList): Integer;
   begin
-    List.AutoGrow := Value;
+    Row.Move(CurIndex, NewIndex);
     Result := 0;
   end;
 
 begin
-  if FAutoGrow2 <> Value then
+  FRows.ForAll(@MoveInRow, False);
+end;
+
+procedure TSparseMatrix.MoveRow(const CurIndex, NewIndex: Integer);
+begin
+  FRows.Move(CurIndex, NewIndex);
+end;
+
+procedure TSparseMatrix.SetAutoGrowX(const Value: Boolean);
+
+  function SetAutoGrow(const Y: Integer; Row: TSparseList): Integer;
   begin
-    FLists.ForAll(@SetAutoGrow, False);
-    FAutoGrow2 := Value;
+    Row.AutoGrow := Value;
+    Result := 0;
+  end;
+
+begin
+  if FAutoGrowX <> Value then
+  begin
+    FRows.ForAll(@SetAutoGrow, False);
+    FAutoGrowX := Value;
   end;
 end;
 
-procedure TCustomSparseMatrix.SetItem(const Index1, Index2: Integer;
-  const Item: Pointer);
-var
-  List: TCustomSparseList;
+procedure TSparseMatrix.SetAutoGrowY(const Value: Boolean);
 begin
-  List := FLists[Index1];
-  if List <> nil then
-    List[Index2] := Item
+  FRows.AutoGrow := Value;
+end;
+
+procedure TSparseMatrix.SetItem(const X, Y: Integer; const Item: Pointer);
+var
+  Row: TSparseList;
+begin
+  Row := FRows[Y];
+  if Row <> nil then
+    Row[X] := Item
   else
     if Item <> nil then
     begin
-      FLists[Index1] := TCustomSparseList.Create(FAutoGrow2, FQuota2);
-      TCustomSparseList(FLists[Index1])[Index2] := Item;
+      FRows[Y] := TSparseList.Create(FAutoGrowX, FQuotaX);
+      GetRow(Y)[X] := Item;
     end;
 end;
 
-procedure TCustomSparseMatrix.SetList(const Index: Integer;
-  const List: TCustomSparseList);
-begin
-  FLists[Index] := List;
-end;
+procedure TSparseMatrix.SetQuotaX(const Value: TListQuota);
 
-procedure TCustomSparseMatrix.SetQuota1(const Value: TListQuota);
-begin
-  FLists.Quota := Value;
-end;
-
-procedure TCustomSparseMatrix.SetQuota2(const Value: TListQuota);
-
-  function SetQuota(const Index: Integer; List: TCustomSparseList): Integer;
+  function SetQuota(const Y: Integer; Row: TSparseList): Integer;
   begin
-    List.Quota := Value;
+    Row.Quota := Value;
     Result := 0;
   end;
 
 begin
-  if FQuota2 <> Value then
+  if FQuotaX <> Value then
   begin
-    FLists.ForAll(@SetQuota, False);
-    FQuota2 := Value;
+    FRows.ForAll(@SetQuota, False);
+    FQuotaX := Value;
   end;
+end;
+
+procedure TSparseMatrix.SetQuotaY(const Value: TListQuota);
+begin
+  FRows.Quota := Value;
+end;
+
+procedure TSparseMatrix.SetRow(const Y: Integer; const Row: TSparseList);
+begin
+  FRows[Y] := Row;
+end;
+
+procedure TSparseMatrix.SetRowCount(const Value: Integer);
+
+  function FreeRow(const Y: Integer; Row: TSparseList): Integer;
+  begin
+    if Y >= Value then
+    begin
+      Row.Free;
+      Result := 0;
+    end
+    else
+      Result := 1;
+  end;
+
+begin
+  FRows.ForAll(@FreeRow, True);
+  FRows.Count := Value;
 end;
 
 end.
