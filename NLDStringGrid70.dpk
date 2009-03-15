@@ -1,4 +1,4 @@
-package NLDStringgridD6;
+package NLDStringGrid70;
 
 {$R *.res}
 {$R 'NLDStringgrid.dcr'}
