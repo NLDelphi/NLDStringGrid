@@ -10,8 +10,8 @@
 { *************************************************************************** }
 {                                                                             }
 { Last edit by: Albert de Weerd                                               }
-{ Date: February 25, 2009                                                     }
-{ Version: 2.0.0.1                                                            }
+{ Date: March 16, 2009                                                        }
+{ Version: 2.0.0.2                                                            }
 {                                                                             }
 { *************************************************************************** }
 
@@ -116,10 +116,6 @@ type
     constructor Create(const AutoGrow: Boolean = True;
       const AQuota: TListQuota = lqSmall);
     destructor Destroy; override;
-    function ForAllItems(ProcessItemFunc: TProcessMatrixItem;
-      const Descending: Boolean): Integer;
-    function ForAllRows(ProcessListFunc: TProcessListItem;
-      const Descending: Boolean): Integer;
     procedure MoveCol(const CurIndex, NewIndex: Integer);
     procedure MoveRow(const CurIndex, NewIndex: Integer);
     property Items[const X, Y: Integer]: Pointer read GetItem
@@ -562,38 +558,6 @@ begin
   Clear;
   FRows.Free;
   inherited Destroy;
-end;
-
-function TSparseMatrix.ForAllItems(ProcessItemFunc: TProcessMatrixItem;
-  const Descending: Boolean): Integer;
-var
-  YY: Integer;
-
-  function ProcessItem(const X: Integer; Item: Pointer): Integer;
-  begin
-    Result := ProcessItemFunc(X, YY, Item);
-  end;
-
-  function ProcessRow(const Y: Integer; Row: TSparseList): Integer;
-  begin
-    YY := Y;
-    Result := Row.ForAll(@ProcessItem, Descending);
-  end;
-
-begin
-  Result := FRows.ForAll(@ProcessRow, Descending);
-end;
-
-function TSparseMatrix.ForAllRows(ProcessListFunc: TProcessListItem;
-  const Descending: Boolean): Integer;
-
-  function ProcessRow(Y: Integer; Row: TSparseList): Integer;
-  begin
-    Result := ProcessListFunc(Y, Row);
-  end;
-
-begin
-  Result := FRows.ForAll(@ProcessRow, Descending);
 end;
 
 function TSparseMatrix.GetAutoGrowY: Boolean;
