@@ -1,7 +1,7 @@
 package NLDStringgridD6;
 
 {$R *.res}
-{$R 'source\NLDStringgrid.dcr'}
+{$R 'NLDStringgrid.dcr'}
 {$ALIGN 8}
 {$ASSERTIONS ON}
 {$BOOLEVAL OFF}
@@ -31,6 +31,6 @@ requires
   vcl;
 
 contains
-  NLDStringgrid in 'Source\NLDStringgrid.pas';
+  NLDStringgrid in 'NLDStringgrid.pas';
 
 end.
