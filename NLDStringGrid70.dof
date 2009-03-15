@@ -88,7 +88,7 @@ RemoteSymbols=0
 MinStackSize=16384
 MaxStackSize=1048576
 ImageBase=4194304
-ExeDescription=NLDStringGrid donated by walterheck
+ExeDescription=NLDStringGrid donated by Walterheck
 [Directories]
 OutputDir=
 UnitOutputDir=
@@ -134,3 +134,17 @@ OriginalFilename=
 ProductName=
 ProductVersion=1.0.0.0
 Comments=
+CompanyWebsite=www.awerdo.nl
+License=Free to use, free to modify
+Author=Albert de Weerd (aka NGLN)
+Initiator=Walterheck
+[Excluded Packages]
+C:\Program Files\Borland\Delphi7\Bin\dclbde70.bpl=Borland BDE DB Components
+c:\program files\borland\delphi7\Bin\DBWEBXPRT.BPL=Borland Web Wizard Package
+c:\program files\borland\delphi7\Bin\dcltee70.bpl=TeeChart Components
+c:\program files\borland\delphi7\Bin\DCLIB70.bpl=InterBase Data Access Components
+C:\WINDOWS\system32\ibevnt70.bpl=Borland Interbase Event Alerter Component
+c:\program files\borland\delphi7\Bin\dclclxdb70.bpl=Borland CLX Database Components
+C:\Program Files\Borland\Delphi7\Bin\dclclxstd70.bpl=Borland CLX Standard Components
+c:\program files\borland\delphi7\Bin\dclIntraweb_50_70.bpl=Intraweb 5.0 Design Package for Delphi 7
+c:\program files\borland\delphi7\Bin\dcldss70.bpl=Borland Decision Cube Components
