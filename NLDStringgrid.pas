@@ -11,8 +11,8 @@
 { *************************************************************************** }
 {                                                                             }
 { Edit by: Albert de Weerd (aka NGLN)                                         }
-{ Date: March 16, 2009                                                        }
-{ Version: 2.0.0.0                                                            }
+{ Date: March 17, 2009                                                        }
+{ Version: 2.0.0.1                                                            }
 {                                                                             }
 { *************************************************************************** }
 
@@ -447,6 +447,7 @@ type
   TCustomStringGrid = class(TMergeGrid)
   private
     FAutoRowHeights: Boolean;
+    FClickCol: Integer;
     FColSizing: Boolean;
     FColumns: TStringGridColumns;
     FColWidthsUpdating: Boolean;
@@ -459,7 +460,6 @@ type
     FFocusRectStyle: TFocusRectStyle;
     FFontBackup: TFont;
     FGridLineColor: TColor;
-    FLastClickColumnIndex: Integer;
     FOnDrawCell: TDrawCellEvent;
     FOnEditButtonClick: TNotifyEvent;
     FOnTitleClick: TTitleClickEvent;
@@ -1514,7 +1514,7 @@ begin
   case Action of
     lnAdded:
       if Ptr = nil then
-        Ptr := New(PRect);
+        Ptr := New(PMerging);
     lnDeleted,
     lnExtracted:
       Dispose(Ptr);
@@ -3008,7 +3008,7 @@ end;
 procedure TCustomStringGrid.DblClick;
 begin
   if FColSizing then
-    AutoColWidth(FLastClickColumnIndex);
+    AutoColWidth(FClickCol);
   FColSizing := False;
   inherited DblClick;
 end;
@@ -3506,7 +3506,7 @@ var
   Coord: TGridCoord;
 begin
   Coord := MouseCoord(X, Y);
-  FLastClickColumnIndex := Coord.X;
+  FClickCol := Coord.X;
 { With thanks to: www.nldelphi.com/Forum/showthread.php?t=20027
   To prevent too much scrolling if last row is half shown: }
   if Coord.Y = FDrawInfo.Vert.LastFullVisibleCell + 1 then
@@ -3537,10 +3537,9 @@ begin
   if SaveState in [gsNormal, gsSelecting, gsColMoving] then
   begin
     Coord := MouseCoord(X, Y);
-    if Coord.X = FLastClickColumnIndex then
-      if (Button = mbLeft) and (Coord.X >= 0) and (Coord.X < ColCount) and
-        (Coord.Y >= 0) and (Coord.Y < FixedRows) then
-          DoTitleClick(Coord.X);
+    if (Coord.X = FClickCol) and (Button = mbLeft) and (Coord.X >= 0) and
+        (Coord.X < ColCount) and (Coord.Y = 0) and (FixedRows > 0) then
+      DoTitleClick(Coord.X);
   end;
 end;
 
