@@ -11,8 +11,8 @@
 { *************************************************************************** }
 {                                                                             }
 { Edit by: Albert de Weerd (aka NGLN)                                         }
-{ Date: March 17, 2009                                                        }
-{ Version: 2.0.0.1                                                            }
+{ Date: March 20, 2009                                                        }
+{ Version: 2.0.0.2                                                            }
 {                                                                             }
 { *************************************************************************** }
 
@@ -55,8 +55,8 @@ type
     FGrid: TDataGrid;
     FIndex: Integer;
     FIsCol: Boolean;
-    function LinkGridCol(const AIndex: Integer): TStrings;
-    function LinkGridRow(const AIndex: Integer): TStrings;
+    function LinkGridCol(AIndex: Integer): TStrings;
+    function LinkGridRow(AIndex: Integer): TStrings;
   protected
     function Get(Index: Integer): String; override;
     function GetCount: Integer; override;
@@ -85,43 +85,41 @@ type
     FMemoryOptions: TMemoryOptions;
     FOwnsObjects: Boolean;
     FRows: TGridStringsList;
-    procedure DisposeData(const NewColCount, NewRowCount: Integer);
-    function EnsureData(const ACol, ARow: Integer): PCell;
-    function GetCells(const ACol, ARow: Integer): String;
-    function GetCols(const Index: Integer): TStrings;
-    function GetObjects(const ACol, ARow: Integer): TObject;
-    function GetReadOnly(const ACol, ARow: Integer): Boolean;
-    function GetRows(const Index: Integer): TStrings;
-    function InGrid(const ACol, ARow: Integer;
-      const IncludeFixed: Boolean): Boolean;
+    procedure DisposeData(NewColCount, NewRowCount: Integer);
+    function EnsureData(ACol, ARow: Integer): PCell;
+    function GetCells(ACol, ARow: Integer): String;
+    function GetCols(Index: Integer): TStrings;
+    function GetObjects(ACol, ARow: Integer): TObject;
+    function GetReadOnly(ACol, ARow: Integer): Boolean;
+    function GetRows(Index: Integer): TStrings;
+    function InGrid(ACol, ARow: Integer; IncludeFixed: Boolean): Boolean;
     procedure InitializeData;
-    procedure SetCols(const Index: Integer; const Value: TStrings);
-    procedure SetDataSize(const NewColCount, NewRowCount: Integer);
-    procedure SetMemoryOptions(const Value: TMemoryOptions);
-    procedure SetObjects(const ACol, ARow: Integer; const Value: TObject);
-    procedure SetReadOnly(const ACol, ARow: Integer; const Value: Boolean);
-    procedure SetRows(const Index: Integer; const Value: TStrings);
+    procedure SetCols(Index: Integer; Value: TStrings);
+    procedure SetDataSize(NewColCount, NewRowCount: Integer);
+    procedure SetMemoryOptions(Value: TMemoryOptions);
+    procedure SetObjects(ACol, ARow: Integer; Value: TObject);
+    procedure SetReadOnly(ACol, ARow: Integer; Value: Boolean);
+    procedure SetRows(Index: Integer; Value: TStrings);
   protected
     DataUpdating: LONGBOOL;
     procedure ColumnMoved(FromIndex, ToIndex: Integer); override;
-    function GetData(const ACol, ARow: Integer): PCell; virtual;
+    function GetData(ACol, ARow: Integer): PCell; virtual;
     procedure InvalidateGridRect(const AGridRect: TGridRect); virtual;
     procedure RowMoved(FromIndex, ToIndex: Integer); override;
-    procedure SetCells(const ACol, ARow: Integer; const Value: String); virtual;
+    procedure SetCells(ACol, ARow: Integer; const Value: String); virtual;
     procedure SizeChanged(OldColCount, OldRowCount: Integer); override;
-    procedure UpdateCell(const ACol, ARow: Integer); virtual;
-    property Cells[const ACol, ARow: Integer]: String read GetCells
-      write SetCells;
-    property Cols[const Index: Integer]: TStrings read GetCols write SetCols;
+    procedure UpdateCell(ACol, ARow: Integer); virtual;
+    property Cells[ACol, ARow: Integer]: String read GetCells write SetCells;
+    property Cols[Index: Integer]: TStrings read GetCols write SetCols;
     property MemoryOptions: TMemoryOptions read FMemoryOptions
       write SetMemoryOptions default DefMemoryOptions;
-    property Objects[const ACol, ARow: Integer]: TObject read GetObjects
+    property Objects[ACol, ARow: Integer]: TObject read GetObjects
       write SetObjects;
     property OwnsObjects: Boolean read FOwnsObjects write FOwnsObjects
       default False;
-    property ReadOnly[const ACol, ARow: Integer]: Boolean read GetReadOnly
+    property ReadOnly[ACol, ARow: Integer]: Boolean read GetReadOnly
       write SetReadOnly;
-    property Rows[const Index: Integer]: TStrings read GetRows write SetRows;
+    property Rows[Index: Integer]: TStrings read GetRows write SetRows;
   public
     procedure BeginUpdateData; virtual;
     constructor Create(AOwner: TComponent); override;
@@ -139,16 +137,16 @@ type
 
   TMergings = class(TList)
   private
-    function GetItem(const Index: Integer): TMerging;
-    procedure SetItem(const Index: Integer; const Value: TMerging);
+    function GetItem(Index: Integer): TMerging;
+    procedure SetItem(Index: Integer; const Value: TMerging);
   protected
     procedure Notify(Ptr: Pointer; Action: TListNotification); override;
   public
     function Add(const AMerging: TMerging): Integer; overload;
-    function Add(const ARect: TGridRect; const MergeText,
-       MultiLine: Boolean): Integer; overload;
-    function Extract(const Index: Integer): TMerging; overload;
-    property Items[const Index: Integer]: TMerging read GetItem
+    function Add(const ARect: TGridRect; MergeText,
+      MultiLine: Boolean): Integer; overload;
+    function Extract(Index: Integer): TMerging; overload;
+    property Items[Index: Integer]: TMerging read GetItem
       write SetItem; default;
   end;
 
@@ -158,15 +156,15 @@ type
   protected
     procedure AdjustSize; reintroduce;
     procedure ColumnMoved(FromIndex: Integer; ToIndex: Integer); override;
-    function IsMerged(const ACol, ARow: Integer;
+    function IsMerged(ACol, ARow: Integer;
       out Merging: TMerging): Boolean; virtual;
     procedure RowMoved(FromIndex: Integer; ToIndex: Integer); override;
     procedure SizeChanged(OldColCount, OldRowCount: Integer); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
-    procedure MergeCells(const AGridRect: TGridRect; const MergeText: Boolean;
-      const MultiLine: Boolean); virtual;
+    procedure MergeCells(const AGridRect: TGridRect; MergeText,
+      MultiLine: Boolean); virtual;
     procedure UnMergeCells(const AGridRect: TGridRect); virtual;
   end;
 
@@ -185,19 +183,19 @@ type
     FGrid: TCustomStringGrid;
     FMultiLine: Boolean;
     FVAlignment: TVAlignment;
-    procedure Changed(const AllColumns: Boolean);
+    procedure Changed(AllColumns: Boolean);
     function GetColor: TColor;
     function GetHeight: Integer;
     function IsCaptionStored: Boolean;
     function IsColorStored: Boolean;
     function IsFontStored: Boolean;
-    procedure SetAlignment(const Value: TAlignment);
+    procedure SetAlignment(Value: TAlignment);
     procedure SetCaption(const Value: String);
-    procedure SetColor(const Value: TColor);
-    procedure SetFont(const Value: TFont);
-    procedure SetHeight(const Value: Integer);
-    procedure SetMultiLine(const Value: Boolean);
-    procedure SetVAlignment(const Value: TVAlignment);
+    procedure SetColor(Value: TColor);
+    procedure SetFont(Value: TFont);
+    procedure SetHeight(Value: Integer);
+    procedure SetMultiLine(Value: Boolean);
+    procedure SetVAlignment(Value: TVAlignment);
   protected
     procedure FontChanged(Sender: TObject); virtual;
   public
@@ -233,7 +231,7 @@ type
     function IsEnabledLinked: Boolean; override;
     function IsOnExecuteLinked: Boolean; override;
     function IsVisibleLinked: Boolean; override;
-    procedure SetCaption(const Value: string); override;
+    procedure SetCaption(const Value: String); override;
     procedure SetEnabled(Value: Boolean); override;
     procedure SetOnExecute(Value: TNotifyEvent); override;
     procedure SetVisible(Value: Boolean); override;
@@ -280,26 +278,26 @@ type
     function IsPickListItemsStored: Boolean;
     function IsReadOnlyStored: Boolean;
     function IsVisibleStored: Boolean;
-    procedure SetAction(const Value: TBasicAction);
-    procedure SetAlignment(const Value: TAlignment);
-    procedure SetColor(const Value: TColor);
+    procedure SetAction(Value: TBasicAction);
+    procedure SetAlignment(Value: TAlignment);
+    procedure SetColor(Value: TColor);
     procedure SetDefaultCellText(const Value: String);
     procedure SetEditFormat(const Value: String);
     procedure SetEditMask(const Value: TEditMask);
-    procedure SetFixed(const Value: Boolean);
-    procedure SetFont(const Value: TFont);
-    procedure SetInputStyle(const Value: TInputStyle);
-    procedure SetMaxLength(const Value: Integer);
-    procedure SetMaxWidth(const Value: Integer);
-    procedure SetMinWidth(const Value: Integer);
-    procedure SetMultiLine(const Value: Boolean);
-    procedure SetPickListItems(const Value: TStrings);
-    procedure SetReadOnly(const Value: Boolean);
-    procedure SetRowNumbers(const Value: Boolean);
-    procedure SetTitle(const Value: TStringGridTitle);
-    procedure SetVAlignment(const Value: TVAlignment);
-    procedure SetVisible(const Value: Boolean);
-    procedure SetWidth(const Value: Integer);
+    procedure SetFixed(Value: Boolean);
+    procedure SetFont(Value: TFont);
+    procedure SetInputStyle(Value: TInputStyle);
+    procedure SetMaxLength(Value: Integer);
+    procedure SetMaxWidth(Value: Integer);
+    procedure SetMinWidth(Value: Integer);
+    procedure SetMultiLine(Value: Boolean);
+    procedure SetPickListItems(Value: TStrings);
+    procedure SetReadOnly(Value: Boolean);
+    procedure SetRowNumbers(Value: Boolean);
+    procedure SetTitle(Value: TStringGridTitle);
+    procedure SetVAlignment(Value: TVAlignment);
+    procedure SetVisible(Value: Boolean);
+    procedure SetWidth(Value: Integer);
   protected
     Destroying: Boolean;
     procedure ActionChanged(Sender: TObject; CheckDefaults: Boolean); dynamic;
@@ -366,7 +364,7 @@ type
     function GetOwner: TPersistent; override;
     procedure Notify(Item: TCollectionItem;
       Action: TCollectionNotification); override;
-    procedure SetItem(Index: Integer; const Value: TStringGridColumn);
+    procedure SetItem(Index: Integer; Value: TStringGridColumn);
     procedure Update(Item: TCollectionItem); override;
   public
     constructor Create(AGrid: TCustomStringGrid);
@@ -390,10 +388,10 @@ type
     function IsEvenRowColorStored: Boolean;
     function IsOddRowColorStored: Boolean;
     function IsStored: Boolean;
-    procedure SetEvenRowColor(const Value: TColor);
-    procedure SetIncludeFixed(const Value: Boolean);
-    procedure SetOddRowColor(const Value: TColor);
-    procedure SetOverrideColumnColor(const Value: Boolean);
+    procedure SetEvenRowColor(Value: TColor);
+    procedure SetIncludeFixed(Value: Boolean);
+    procedure SetOddRowColor(Value: TColor);
+    procedure SetOverrideColumnColor(Value: Boolean);
   public
     constructor Create(AGrid: TCustomStringGrid);
     procedure Assign(Source: TPersistent); override;
@@ -435,11 +433,10 @@ type
 
   TDeletePos = (dpCurrent, dpBegin, dpEnd, dpRange, dpSelection, dpAll);
 
-  TDrawCellEvent = procedure (Sender: TObject; const ACol, ARow: Integer;
-    const ARect: TRect; const State: TGridDrawState;
-    const Stage: TDefaultDrawingMode; const StageBegin: Boolean;
-    Column: TStringGridColumn) of object;
-  TTitleClickEvent = procedure (Sender: TObject; const Index: Integer;
+  TDrawCellEvent = procedure (Sender: TObject; ACol, ARow: Integer;
+    const ARect: TRect; State: TGridDrawState; Stage: TDefaultDrawingMode;
+    StageBegin: Boolean; Column: TStringGridColumn) of object;
+  TTitleClickEvent = procedure (Sender: TObject; Index: Integer;
     Column: TStringGridColumn) of object;
 
   TFocusRectStyle = (frDefault, frSolidAutoBW, frSolidCustomColor);
@@ -470,12 +467,12 @@ type
     FSelectionColor: TColor;
     FStretchModes: TStretchModes;
     FSyncColumns: Boolean;
-    procedure AutoColWidth(const ACol: Integer);
-    procedure AutoRowHeight(const ARow: Integer);
-    function CalcCoordFromPoint(const X, Y: Integer): TGridCoord;
-    function CanColumnMove(const FromIndex, ToIndex: Integer): Boolean;
+    procedure AutoColWidth(ACol: Integer);
+    procedure AutoRowHeight(ARow: Integer);
+    function CalcCoordFromPoint(X, Y: Integer): TGridCoord;
+    function CanColumnMove(FromIndex, ToIndex: Integer): Boolean;
     function CanEdit: Boolean;
-    procedure ChangeEditFormat(const ACol: Integer; const OldFormat,
+    procedure ChangeEditFormat(ACol: Integer; const OldFormat,
       NewFormat: String);
     procedure FixedFontChanged(Sender: TObject);
     function GetColCount: Integer;
@@ -483,35 +480,35 @@ type
     function GetFixedRows: Integer;
     function GetGridLineWidth: Integer;
     function GetReadOnlyColor: TColor;
-    function GetValues(const ACol, ARow: Integer): Variant;
+    function GetValues(ACol, ARow: Integer): Variant;
     procedure InplaceEditorExit(Sender: TObject);
     function IsAlternatingRowColorsStored: Boolean;
     function IsColumnsStored: Boolean;
     function IsFixedFontStored: Boolean;
     function IsReadOnlyColorStored: Boolean;
-    procedure SetAutoRowHeights(const Value: Boolean);
-    procedure SetColCount(const Value: Integer);
-    procedure SetColumns(const Value: TStringGridColumns);
-    procedure SetDefaultDrawing(const Value: TDefaultDrawingModes);
-    procedure SetFixedCols(const Value: Integer);
-    procedure SetFixedFont(const Value: TFont);
-    procedure SetFixedGridLineColor(const Value: TColor);
-    procedure SetFixedRows(const Value: Integer);
-    procedure SetFocusRectColor(const Value: TColor);
-    procedure SetFocusRectStyle(const Value: TFocusRectStyle);
-    procedure SetGridLineColor(const Value: TColor);
-    procedure SetGridLineWidth(const Value: Integer);
-    procedure SetOnEditButtonClick(const Value: TNotifyEvent);
-    procedure SetReadOnlyColor(const Value: TColor);
-    procedure SetRowColors(const Value: TStringGridRowColors);
-    procedure SetSelectionAlphaBlend(const Value: Boolean);
-    procedure SetSelectionAlphaBlendValue(const Value: Byte);
-    procedure SetSelectionColor(const Value: TColor);
+    procedure SetAutoRowHeights(Value: Boolean);
+    procedure SetColCount(Value: Integer);
+    procedure SetColumns(Value: TStringGridColumns);
+    procedure SetDefaultDrawing(Value: TDefaultDrawingModes);
+    procedure SetFixedCols(Value: Integer);
+    procedure SetFixedFont(Value: TFont);
+    procedure SetFixedGridLineColor(Value: TColor);
+    procedure SetFixedRows(Value: Integer);
+    procedure SetFocusRectColor(Value: TColor);
+    procedure SetFocusRectStyle(Value: TFocusRectStyle);
+    procedure SetGridLineColor(Value: TColor);
+    procedure SetGridLineWidth(Value: Integer);
+    procedure SetOnEditButtonClick(Value: TNotifyEvent);
+    procedure SetReadOnlyColor(Value: TColor);
+    procedure SetRowColors(Value: TStringGridRowColors);
+    procedure SetSelectionAlphaBlend(Value: Boolean);
+    procedure SetSelectionAlphaBlendValue(Value: Byte);
+    procedure SetSelectionColor(Value: TColor);
     procedure SetStretchModes(Value: TStretchModes);
-    procedure SetSyncColumns(const Value: Boolean);
-    procedure SetValues(const ACol, ARow: Integer; const Value: Variant);
+    procedure SetSyncColumns(Value: Boolean);
+    procedure SetValues(ACol, ARow: Integer; const Value: Variant);
     procedure StretchColumns;
-    procedure UpdateColumn(const Index: Integer);
+    procedure UpdateColumn(Index: Integer);
     procedure UpdateColumns;
     procedure UpdateColWidths;
     procedure WMEraseBkgnd(var Message: TWmEraseBkgnd); message WM_ERASEBKGND;
@@ -528,21 +525,20 @@ type
     procedure ColWidthsChanged; override;
     function CreateEditor: TInplaceEdit; override;
     procedure DblClick; override;
-    procedure DoTitleClick(const ACol: Integer); virtual;
-    procedure DrawCell(const ACol, ARow: Integer; const ARect: TRect;
-      const AState: TGridDrawState; const AStage: TDefaultDrawingMode;
-      const StageBegin: Boolean); reintroduce; virtual;
+    procedure DoTitleClick(ACol: Integer); virtual;
+    procedure DrawCell(ACol, ARow: Integer; const ARect: TRect;
+      AState: TGridDrawState; AStage: TDefaultDrawingMode;
+      StageBegin: Boolean); reintroduce; virtual;
     function EndColumnDrag(var Origin: Integer; var Destination: Integer;
       const MousePt: TPoint): Boolean; override;
-    function GetCellColor(const ACol, ARow: Integer;
-      const AState: TGridDrawState; Column: TStringGridColumn;
-      Cell: PCell): TColor; virtual;
-    function GetCellDrawFlags(const ARow: Integer; const Merged: Boolean;
-      const Merging: TMerging; const AState: TGridDrawState;
+    function GetCellColor(ACol, ARow: Integer; AState: TGridDrawState;
+      Column: TStringGridColumn; Cell: PCell): TColor; virtual;
+    function GetCellDrawFlags(ARow: Integer; Merged: Boolean;
+      const Merging: TMerging; AState: TGridDrawState;
       Column: TStringGridColumn): UINT; virtual;
     procedure GetCellFont(AFont: TFont; Column: TStringGridColumn;
-      const ARow: Integer; const AState: TGridDrawState); virtual;
-    function GetCellText(const ARow: Integer; const Merged: Boolean;
+      ARow: Integer; AState: TGridDrawState); virtual;
+    function GetCellText(ARow: Integer; Merged: Boolean;
       const Merging: TMerging; Column: TStringGridColumn;
       Cell: PCell): String; virtual;
     function GetEditLimit: Integer; override;
@@ -559,10 +555,8 @@ type
       override;
     procedure Paint; override;
     procedure Resize; override;
-    procedure SetCells(const ACol, ARow: Integer; const Value: String);
-      override;
-    procedure SetEditText(ACol: Integer; ARow: Integer;
-      const Value: String); override;
+    procedure SetCells(ACol, ARow: Integer; const Value: String); override;
+    procedure SetEditText(ACol, ARow: Integer; const Value: String); override;
     procedure SizeChanged(OldColCount, OldRowCount: Integer); override;
     procedure WndProc(var Message: TMessage); override;
     property AlternatingRowColors: TStringGridRowColors read FRowColors
@@ -608,34 +602,32 @@ type
       write SetStretchModes default [];
     property SyncColumns: Boolean read FSyncColumns write SetSyncColumns
       default False;
-    property Values[const ACol, ARow: Integer]: Variant read GetValues
+    property Values[ACol, ARow: Integer]: Variant read GetValues
       write SetValues;
   public
     constructor Create(AOwner: TComponent); override;
     procedure DeleteColumn(ACol: Integer); override;
-    procedure DeleteRows(const DeletePos: TDeletePos; StartIndex: Integer = -1;
-      const Count: Integer = 1);
+    procedure DeleteRows(DeletePos: TDeletePos; StartIndex: Integer = -1;
+      Count: Integer = 1);
     destructor Destroy; override;
-    procedure ExportCSV(const FileName: TFileName;
-      const TitlesFirstRow: Boolean);
-    procedure ImportCSV(const FileName: TFileName;
-      const TitlesFirstRow: Boolean);
-    procedure InsertColumn(const AtIndex: Integer); overload;
-    procedure InsertColumn(const Position: TInsertPos = ipBefore); overload;
-    procedure InsertRow(const AtIndex: Integer); overload;
-    procedure InsertRow(const Position: TInsertPos = ipBefore); overload;
-    function IsEmptyColumn(const ACol: Integer): Boolean;
-    function IsEmptyRow(const ARow: Integer): Boolean;
-    function MouseCoord(const X, Y: Integer): TGridCoord;
-    procedure MouseToCell(const X, Y: Integer; var ACol, ARow: Integer);
-    procedure MoveColumn(const FromIndex, ToIndex: Integer);
-    procedure MoveRow(const FromIndex, ToIndex: Integer);
+    procedure ExportCSV(const FileName: TFileName; TitlesFirstRow: Boolean);
+    procedure ImportCSV(const FileName: TFileName; TitlesFirstRow: Boolean);
+    procedure InsertColumn(AtIndex: Integer); overload;
+    procedure InsertColumn(Position: TInsertPos = ipBefore); overload;
+    procedure InsertRow(AtIndex: Integer); overload;
+    procedure InsertRow(Position: TInsertPos = ipBefore); overload;
+    function IsEmptyColumn(ACol: Integer): Boolean;
+    function IsEmptyRow(ARow: Integer): Boolean;
+    function MouseCoord(X, Y: Integer): TGridCoord;
+    procedure MouseToCell(X, Y: Integer; var ACol, ARow: Integer);
+    procedure MoveColumn(FromIndex, ToIndex: Integer);
+    procedure MoveRow(FromIndex, ToIndex: Integer);
     procedure ResetAllFonts(AFont: TFont = nil);
-    procedure ResetMainColors(const AGridColor: TColor = clWindow;
-      const AFixedColor: TColor = clBtnFace);
+    procedure ResetMainColors(AGridColor: TColor = clWindow;
+      AFixedColor: TColor = clBtnFace);
     procedure SetBounds(ALeft, ATop, AWidth, AHeight: Integer); override;
-    procedure SetGradientColumnColors(const First, Last: TColor;
-      const ColumnsOnly: Boolean);
+    procedure SetGradientColumnColors(First, Last: TColor;
+      ColumnsOnly: Boolean);
   end;
 
   TNLDStringGrid = class(TCustomStringGrid)
@@ -747,7 +739,7 @@ begin
   Result.B := GetBValue(AColor);
 end;
 
-function MixColor(const Base, MixWith: TColor; const Factor: Double): TColor;
+function MixColor(Base, MixWith: TColor; const Factor: Double): TColor;
 var
   FBase: TRGB;
   FMixWith: TRGB;
@@ -788,8 +780,7 @@ begin
   until SeparatorCount >= 2;
 end;
 
-function CoordInGridRect(const ACol, ARow: Integer;
-  const ARect: TGridRect): Boolean;
+function CoordInGridRect(ACol, ARow: Integer; const ARect: TGridRect): Boolean;
 begin
   Result := (ACol >= ARect.Left) and (ACol <= ARect.Right) and
     (ARow >= ARect.Top) and (ARow <= ARect.Bottom);
@@ -950,14 +941,14 @@ begin
   raise EInvalidGridOperation.Create(SInvalidGridStringsInsert);
 end;
 
-function TGridStrings.LinkGridCol(const AIndex: Integer): TStrings;
+function TGridStrings.LinkGridCol(AIndex: Integer): TStrings;
 begin
   FIndex := AIndex;
   FIsCol := True;
   Result := Self;
 end;
 
-function TGridStrings.LinkGridRow(const AIndex: Integer): TStrings;
+function TGridStrings.LinkGridRow(AIndex: Integer): TStrings;
 begin
   FIndex := AIndex;
   FIsCol := False;
@@ -994,7 +985,7 @@ end;
 
 procedure TGridStringsList.Clear;
 
-  function FreeItem(const Index: Integer; Item: TGridStrings): Integer;
+  function FreeItem(Index: Integer; Item: TGridStrings): Integer;
   begin
     Item.Free;
     Result := 0;
@@ -1011,16 +1002,15 @@ type
   TMatrix = class(TObject)
   private
     FItems: array of array of Pointer;
-    function GetItem(const X, Y: Integer): Pointer;
-    procedure SetItem(const X, Y: Integer; const Value: Pointer);
+    function GetItem(X, Y: Integer): Pointer;
+    procedure SetItem(X, Y: Integer; Value: Pointer);
   public
     procedure Assign(AMatrix: TSparseMatrix);
     procedure AssignTo(AMatrix: TSparseMatrix);
-    procedure Exchange(const X1, Y1, X2, Y2: Integer);
-    procedure MoveCol(const CurIndex, NewIndex: Integer);
-    procedure MoveRow(const CurIndex, NewIndex: Integer);
-    property Items[const X, Y: Integer]: Pointer read GetItem
-      write SetItem; default;
+    procedure Exchange(X1, Y1, X2, Y2: Integer);
+    procedure MoveCol(CurIndex, NewIndex: Integer);
+    procedure MoveRow(CurIndex, NewIndex: Integer);
+    property Items[X, Y: Integer]: Pointer read GetItem write SetItem; default;
   end;
 
 procedure TMatrix.Assign(AMatrix: TSparseMatrix);
@@ -1044,7 +1034,7 @@ begin
       AMatrix[X, Y] := FItems[X, Y];
 end;
 
-procedure TMatrix.Exchange(const X1, Y1, X2, Y2: Integer);
+procedure TMatrix.Exchange(X1, Y1, X2, Y2: Integer);
 var
   P1: Pointer;
   P2: Pointer;
@@ -1072,7 +1062,7 @@ begin
     end;
 end;
 
-function TMatrix.GetItem(const X, Y: Integer): Pointer;
+function TMatrix.GetItem(X, Y: Integer): Pointer;
 begin
   if (Length(FItems) > X) and (Length(FItems[X]) > Y) then
     Result := FItems[X, Y]
@@ -1080,7 +1070,7 @@ begin
     Result := nil;
 end;
 
-procedure TMatrix.MoveCol(const CurIndex, NewIndex: Integer);
+procedure TMatrix.MoveCol(CurIndex, NewIndex: Integer);
 var
   X: Integer;
   Y: Integer;
@@ -1095,7 +1085,7 @@ begin
         Exchange(X, Y, X + 1, Y);
 end;
 
-procedure TMatrix.MoveRow(const CurIndex, NewIndex: Integer);
+procedure TMatrix.MoveRow(CurIndex, NewIndex: Integer);
 var
   X: Integer;
   Y: Integer;
@@ -1110,7 +1100,7 @@ begin
           Exchange(X, Y, X, Y + 1);
 end;
 
-procedure TMatrix.SetItem(const X, Y: Integer; const Value: Pointer);
+procedure TMatrix.SetItem(X, Y: Integer; Value: Pointer);
 begin
   if Length(FItems) <= X then
     SetLength(FItems, X + 1);
@@ -1158,7 +1148,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TDataGrid.DisposeData(const NewColCount, NewRowCount: Integer);
+procedure TDataGrid.DisposeData(NewColCount, NewRowCount: Integer);
 
   function DisposeCell(ACol: Integer; Cell: PCell): Integer;
   begin
@@ -1206,7 +1196,7 @@ begin
   Dec(DataUpdating);
 end;
 
-function TDataGrid.EnsureData(const ACol, ARow: Integer): PCell;
+function TDataGrid.EnsureData(ACol, ARow: Integer): PCell;
 begin
   Result := GetData(ACol, ARow);
   if Result = nil then
@@ -1220,7 +1210,7 @@ begin
   end;
 end;
 
-function TDataGrid.GetCells(const ACol, ARow: Integer): String;
+function TDataGrid.GetCells(ACol, ARow: Integer): String;
 var
   Cell: PCell;
 begin
@@ -1231,7 +1221,7 @@ begin
     Result := Cell^.FString;
 end;
 
-function TDataGrid.GetCols(const Index: Integer): TStrings;
+function TDataGrid.GetCols(Index: Integer): TStrings;
 begin
   if moStoreColsRows in FMemoryOptions then
   begin
@@ -1246,7 +1236,7 @@ begin
     Result := FGridStrings.LinkGridCol(Index);
 end;
 
-function TDataGrid.GetData(const ACol, ARow: Integer): PCell;
+function TDataGrid.GetData(ACol, ARow: Integer): PCell;
 begin
   if moSparseStorage in FMemoryOptions then
     Result := TSparseMatrix(FData)[ACol, ARow]
@@ -1254,7 +1244,7 @@ begin
     Result := TMatrix(FData)[ACol, ARow];
 end;
 
-function TDataGrid.GetObjects(const ACol, ARow: Integer): TObject;
+function TDataGrid.GetObjects(ACol, ARow: Integer): TObject;
 var
   Cell: PCell;
 begin
@@ -1265,7 +1255,7 @@ begin
     Result := Cell^.FObject;
 end;
 
-function TDataGrid.GetReadOnly(const ACol, ARow: Integer): Boolean;
+function TDataGrid.GetReadOnly(ACol, ARow: Integer): Boolean;
 var
   Cell: PCell;
 begin
@@ -1276,7 +1266,7 @@ begin
     Result := Cell^.FReadOnly;
 end;
 
-function TDataGrid.GetRows(const Index: Integer): TStrings;
+function TDataGrid.GetRows(Index: Integer): TStrings;
 begin
   if moStoreColsRows in FMemoryOptions then
   begin
@@ -1291,8 +1281,7 @@ begin
     Result := FGridStrings.LinkGridRow(Index);
 end;
 
-function TDataGrid.InGrid(const ACol, ARow: Integer;
-  const IncludeFixed: Boolean): Boolean;
+function TDataGrid.InGrid(ACol, ARow: Integer; IncludeFixed: Boolean): Boolean;
 begin
   if moBeyondGrid in FMemoryOptions then
     Result := True
@@ -1348,7 +1337,7 @@ begin
   inherited RowMoved(FromIndex, ToIndex);
 end;
 
-procedure TDataGrid.SetCells(const ACol, ARow: Integer; const Value: String);
+procedure TDataGrid.SetCells(ACol, ARow: Integer; const Value: String);
 var
   Cell: PCell;
 begin
@@ -1363,12 +1352,12 @@ begin
   end;
 end;
 
-procedure TDataGrid.SetCols(const Index: Integer; const Value: TStrings);
+procedure TDataGrid.SetCols(Index: Integer; Value: TStrings);
 begin
   GetCols(Index).Assign(Value);
 end;
 
-procedure TDataGrid.SetDataSize(const NewColCount, NewRowCount: Integer);
+procedure TDataGrid.SetDataSize(NewColCount, NewRowCount: Integer);
 var
   iCol: Integer;
 begin
@@ -1384,7 +1373,7 @@ begin
       end;
 end;
 
-procedure TDataGrid.SetMemoryOptions(const Value: TMemoryOptions);
+procedure TDataGrid.SetMemoryOptions(Value: TMemoryOptions);
 var
   Temp: Pointer;
 begin
@@ -1425,8 +1414,7 @@ begin
   end;
 end;
 
-procedure TDataGrid.SetObjects(const ACol, ARow: Integer;
-  const Value: TObject);
+procedure TDataGrid.SetObjects(ACol, ARow: Integer; Value: TObject);
 var
   Cell: PCell;
 begin
@@ -1441,8 +1429,7 @@ begin
   end;
 end;
 
-procedure TDataGrid.SetReadOnly(const ACol, ARow: Integer;
-  const Value: Boolean);
+procedure TDataGrid.SetReadOnly(ACol, ARow: Integer; Value: Boolean);
 var
   Cell: PCell;
 begin
@@ -1457,7 +1444,7 @@ begin
   end;
 end;
 
-procedure TDataGrid.SetRows(const Index: Integer; const Value: TStrings);
+procedure TDataGrid.SetRows(Index: Integer; Value: TStrings);
 begin
   GetRows(Index).Assign(Value);
 end;
@@ -1468,7 +1455,7 @@ begin
   inherited SizeChanged(OldColCount, OldRowCount);
 end;
 
-procedure TDataGrid.UpdateCell(const ACol, ARow: Integer);
+procedure TDataGrid.UpdateCell(ACol, ARow: Integer);
 begin
   if not DataUpdating then
     InvalidateCell(ACol, ARow);
@@ -1487,7 +1474,7 @@ begin
   end;
 end;
 
-function TMergings.Add(const ARect: TGridRect; const MergeText,
+function TMergings.Add(const ARect: TGridRect; MergeText,
   MultiLine: Boolean): Integer;
 var
   Merging: TMerging;
@@ -1498,13 +1485,13 @@ begin
   Result := Add(Merging);
 end;
 
-function TMergings.Extract(const Index: Integer): TMerging;
+function TMergings.Extract(Index: Integer): TMerging;
 begin
   Result := Items[Index];
   Delete(Index);
 end;
 
-function TMergings.GetItem(const Index: Integer): TMerging;
+function TMergings.GetItem(Index: Integer): TMerging;
 begin
   Result := PMerging(inherited Items[Index])^;
 end;
@@ -1522,7 +1509,7 @@ begin
   inherited Notify(Ptr, Action);
 end;
 
-procedure TMergings.SetItem(const Index: Integer; const Value: TMerging);
+procedure TMergings.SetItem(Index: Integer; const Value: TMerging);
 begin
   PMerging(inherited Items[Index])^ := Value;
 end;
@@ -1567,7 +1554,7 @@ begin
   inherited Destroy;
 end;
 
-function TMergeGrid.IsMerged(const ACol, ARow: Integer;
+function TMergeGrid.IsMerged(ACol, ARow: Integer;
   out Merging: TMerging): Boolean;
 var
   i: Integer;
@@ -1582,8 +1569,8 @@ begin
     end;
 end;
 
-procedure TMergeGrid.MergeCells(const AGridRect: TGridRect;
-  const MergeText, MultiLine: Boolean);
+procedure TMergeGrid.MergeCells(const AGridRect: TGridRect; MergeText,
+  MultiLine: Boolean);
 begin
   with AGridRect do
     if (Left >= FixedCols) and (Top >= FixedRows) and (Right < Colcount) and
@@ -1688,7 +1675,7 @@ begin
     inherited Assign(Source);
 end;
 
-procedure TStringGridTitle.Changed(const AllColumns: Boolean);
+procedure TStringGridTitle.Changed(AllColumns: Boolean);
 begin
   if FColumn <> nil then
     FColumn.Changed(AllColumns);
@@ -1753,7 +1740,7 @@ begin
     Result := False;
 end;
 
-procedure TStringGridTitle.SetAlignment(const Value: TAlignment);
+procedure TStringGridTitle.SetAlignment(Value: TAlignment);
 begin
   if FAlignment <> Value then
   begin
@@ -1773,7 +1760,7 @@ begin
   end;
 end;
 
-procedure TStringGridTitle.SetColor(const Value: TColor);
+procedure TStringGridTitle.SetColor(Value: TColor);
 begin
   if FColor <> Value then
   begin
@@ -1782,12 +1769,12 @@ begin
   end;
 end;
 
-procedure TStringGridTitle.SetFont(const Value: TFont);
+procedure TStringGridTitle.SetFont(Value: TFont);
 begin
   FFont.Assign(Value);
 end;
 
-procedure TStringGridTitle.SetHeight(const Value: Integer);
+procedure TStringGridTitle.SetHeight(Value: Integer);
 begin
   if FGrid <> nil then
     FGrid.RowHeights[0] := Value
@@ -1800,7 +1787,7 @@ begin
         ['setting height', ClassName, Caption]);
 end;
 
-procedure TStringGridTitle.SetMultiLine(const Value: Boolean);
+procedure TStringGridTitle.SetMultiLine(Value: Boolean);
 begin
   if FMultiLine <> Value then
   begin
@@ -1809,7 +1796,7 @@ begin
   end;
 end;
 
-procedure TStringGridTitle.SetVAlignment(const Value: TVAlignment);
+procedure TStringGridTitle.SetVAlignment(Value: TVAlignment);
 begin
   if FVAlignment <> Value then
   begin
@@ -2132,7 +2119,7 @@ begin
     Result := not Visible;
 end;
 
-procedure TStringGridColumn.SetAction(const Value: TBasicAction);
+procedure TStringGridColumn.SetAction(Value: TBasicAction);
 begin
   if Value = nil then
     FreeAndNil(FActionLink)
@@ -2149,7 +2136,7 @@ begin
   Changed(False);
 end;
 
-procedure TStringGridColumn.SetAlignment(const Value: TAlignment);
+procedure TStringGridColumn.SetAlignment(Value: TAlignment);
 begin
   if FAlignment <> Value then
   begin
@@ -2158,7 +2145,7 @@ begin
   end;
 end;
 
-procedure TStringGridColumn.SetColor(const Value: TColor);
+procedure TStringGridColumn.SetColor(Value: TColor);
 begin
   if FColor <> Value then
   begin
@@ -2198,7 +2185,7 @@ begin
   end;
 end;
 
-procedure TStringGridColumn.SetFixed(const Value: Boolean);
+procedure TStringGridColumn.SetFixed(Value: Boolean);
 begin
   if (Fixed <> Value) then
     if FGrid <> nil then
@@ -2213,7 +2200,7 @@ begin
         ['setting fixation', ClassName, DisplayName]);
 end;
 
-procedure TStringGridColumn.SetFont(const Value: TFont);
+procedure TStringGridColumn.SetFont(Value: TFont);
 begin
   FFont.Assign(Value);
 end;
@@ -2238,7 +2225,7 @@ begin
   end;
 end;
 
-procedure TStringGridColumn.SetInputStyle(const Value: TInputStyle);
+procedure TStringGridColumn.SetInputStyle(Value: TInputStyle);
 begin
   if FInputStyle <> Value then
   begin
@@ -2248,14 +2235,14 @@ begin
   end;
 end;
 
-procedure TStringGridColumn.SetMaxLength(const Value: Integer);
+procedure TStringGridColumn.SetMaxLength(Value: Integer);
 begin
   if InputStyle in [isString, isCustom] then
     if FMaxLength <> Value then
       FMaxLength := Max(Value, 0);
 end;
 
-procedure TStringGridColumn.SetMaxWidth(const Value: Integer);
+procedure TStringGridColumn.SetMaxWidth(Value: Integer);
 begin
   if FMaxWidth <> Value then
   begin
@@ -2264,7 +2251,7 @@ begin
   end;
 end;
 
-procedure TStringGridColumn.SetMinWidth(const Value: Integer);
+procedure TStringGridColumn.SetMinWidth(Value: Integer);
 begin
   if FMinWidth <> Value then
   begin
@@ -2273,7 +2260,7 @@ begin
   end;
 end;
 
-procedure TStringGridColumn.SetMultiLine(const Value: Boolean);
+procedure TStringGridColumn.SetMultiLine(Value: Boolean);
 begin
   if FMultiLine <> Value then
   begin
@@ -2282,12 +2269,12 @@ begin
   end;
 end;
 
-procedure TStringGridColumn.SetPickListItems(const Value: TStrings);
+procedure TStringGridColumn.SetPickListItems(Value: TStrings);
 begin
   FPickListItems.Assign(Value);
 end;
 
-procedure TStringGridColumn.SetReadOnly(const Value: Boolean);
+procedure TStringGridColumn.SetReadOnly(Value: Boolean);
 var
   iRow: Integer;
 begin
@@ -2309,7 +2296,7 @@ begin
   end;
 end;
 
-procedure TStringGridColumn.SetRowNumbers(const Value: Boolean);
+procedure TStringGridColumn.SetRowNumbers(Value: Boolean);
 begin
   if FRowNumbers <> Value then
   begin
@@ -2318,12 +2305,12 @@ begin
   end;
 end;
 
-procedure TStringGridColumn.SetTitle(const Value: TStringGridTitle);
+procedure TStringGridColumn.SetTitle(Value: TStringGridTitle);
 begin
   FTitle.Assign(Value);
 end;
 
-procedure TStringGridColumn.SetVAlignment(const Value: TVAlignment);
+procedure TStringGridColumn.SetVAlignment(Value: TVAlignment);
 begin
   if FVAlignment <> Value then
   begin
@@ -2332,7 +2319,7 @@ begin
   end;
 end;
 
-procedure TStringGridColumn.SetVisible(const Value: Boolean);
+procedure TStringGridColumn.SetVisible(Value: Boolean);
 begin
   if Visible <> Value then
     if FGrid <> nil then
@@ -2348,7 +2335,7 @@ begin
         ['setting visibility', ClassName, DisplayName]);
 end;
 
-procedure TStringGridColumn.SetWidth(const Value: Integer);
+procedure TStringGridColumn.SetWidth(Value: Integer);
 begin
   if FGrid <> nil then
   begin
@@ -2411,8 +2398,7 @@ begin
   inherited Notify(Item, Action);
 end;
 
-procedure TStringGridColumns.SetItem(Index: Integer;
-  const Value: TStringGridColumn);
+procedure TStringGridColumns.SetItem(Index: Integer; Value: TStringGridColumn);
 begin
   inherited SetItem(Index, Value);
 end;
@@ -2499,7 +2485,7 @@ begin
   Changed;
 end;
 
-procedure TStringGridRowColors.SetEvenRowColor(const Value: TColor);
+procedure TStringGridRowColors.SetEvenRowColor(Value: TColor);
 begin
   if FEvenRowColor <> Value then
   begin
@@ -2508,7 +2494,7 @@ begin
   end;
 end;
 
-procedure TStringGridRowColors.SetIncludeFixed(const Value: Boolean);
+procedure TStringGridRowColors.SetIncludeFixed(Value: Boolean);
 begin
   if FIncludeFixed <> Value then
   begin
@@ -2517,7 +2503,7 @@ begin
   end;
 end;
 
-procedure TStringGridRowColors.SetOddRowColor(const Value: TColor);
+procedure TStringGridRowColors.SetOddRowColor(Value: TColor);
 begin
   if FOddRowColor <> Value then
   begin
@@ -2526,8 +2512,7 @@ begin
   end;
 end;
 
-procedure TStringGridRowColors.SetOverrideColumnColor(
-  const Value: Boolean);
+procedure TStringGridRowColors.SetOverrideColumnColor(Value: Boolean);
 begin
   if FOverrideColumnColor <> Value then
   begin
@@ -2701,7 +2686,7 @@ end;
 
 { TCustomStringGrid }
 
-procedure TCustomStringGrid.AutoColWidth(const ACol: Integer);
+procedure TCustomStringGrid.AutoColWidth(ACol: Integer);
 var
   MaxWidth: Integer;
   iRow: Integer;
@@ -2727,7 +2712,7 @@ begin
   end;
 end;
 
-procedure TCustomStringGrid.AutoRowHeight(const ARow: Integer);
+procedure TCustomStringGrid.AutoRowHeight(ARow: Integer);
 const
   DrawStates: array[Boolean] of TGridDrawState = ([], [gdFixed]);
 var
@@ -2761,9 +2746,9 @@ begin
   end;
 end;
 
-function TCustomStringGrid.CalcCoordFromPoint(const X, Y: Integer): TGridCoord;
+function TCustomStringGrid.CalcCoordFromPoint(X, Y: Integer): TGridCoord;
 
-  function DoCalc(const AxisInfo: TGridAxisDrawInfo; const N: Integer): Integer;
+  function DoCalc(const AxisInfo: TGridAxisDrawInfo; N: Integer): Integer;
   var
     i: Integer;
     Start: Integer;
@@ -2841,8 +2826,7 @@ begin
   Result.Y := DoCalc(FDrawInfo.Vert, Y);
 end;
 
-function TCustomStringGrid.CanColumnMove(const FromIndex,
-  ToIndex: Integer): Boolean;
+function TCustomStringGrid.CanColumnMove(FromIndex, ToIndex: Integer): Boolean;
 begin
   Result := (FromIndex >= 0) and (FromIndex < ColCount) and
     (ToIndex >= 0) and (ToIndex < ColCount);
@@ -2908,8 +2892,8 @@ begin
     (CanEdit or (goAlwaysShowEditor in Options))
 end;
 
-procedure TCustomStringGrid.ChangeEditFormat(const ACol: Integer;
-  const OldFormat, NewFormat: String);
+procedure TCustomStringGrid.ChangeEditFormat(ACol: Integer; const OldFormat,
+  NewFormat: String);
 var
   iRow: Integer;
 begin
@@ -3021,8 +3005,8 @@ begin
   inherited DeleteColumn(ACol);
 end;
 
-procedure TCustomStringGrid.DeleteRows(const DeletePos: TDeletePos;
-  StartIndex: Integer = -1; const Count: Integer = 1);
+procedure TCustomStringGrid.DeleteRows(DeletePos: TDeletePos;
+  StartIndex: Integer = -1; Count: Integer = 1);
 var
   i: Integer;
   SaveSel: TGridRect;
@@ -3066,7 +3050,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TCustomStringGrid.DoTitleClick(const ACol: Integer);
+procedure TCustomStringGrid.DoTitleClick(ACol: Integer);
 begin
   if Columns[ACol] <> nil then
     Columns[ACol].DoTitleClick;
@@ -3074,9 +3058,8 @@ begin
     FOnTitleClick(Self, ACol, Columns[ACol]);
 end;
 
-procedure TCustomStringGrid.DrawCell(const ACol, ARow: Integer;
-  const ARect: TRect; const AState: TGridDrawState;
-  const AStage: TDefaultDrawingMode; const StageBegin: Boolean);
+procedure TCustomStringGrid.DrawCell(ACol, ARow: Integer; const ARect: TRect;
+  AState: TGridDrawState; AStage: TDefaultDrawingMode; StageBegin: Boolean);
 begin
   if Assigned(FOnDrawCell) then
     FOnDrawCell(Self, ACol, ARow, ARect, AState, AStage, StageBegin,
@@ -3090,7 +3073,7 @@ begin
 end;
 
 procedure TCustomStringGrid.ExportCSV(const FileName: TFileName;
-  const TitlesFirstRow: Boolean);
+  TitlesFirstRow: Boolean);
 var
   Lines: TStrings;
   i: Integer;
@@ -3131,8 +3114,8 @@ begin
   InvalidateGrid;
 end;
 
-function TCustomStringGrid.GetCellColor(const ACol, ARow: Integer;
-  const AState: TGridDrawState; Column: TStringGridColumn; Cell: PCell): TColor;
+function TCustomStringGrid.GetCellColor(ACol, ARow: Integer;
+  AState: TGridDrawState; Column: TStringGridColumn; Cell: PCell): TColor;
 var
   DrawRowColor: Boolean;
 begin
@@ -3170,8 +3153,8 @@ begin
   end;
 end;
 
-function TCustomStringGrid.GetCellDrawFlags(const ARow: Integer;
-  const Merged: Boolean; const Merging: TMerging; const AState: TGridDrawState;
+function TCustomStringGrid.GetCellDrawFlags(ARow: Integer; Merged: Boolean;
+  const Merging: TMerging; AState: TGridDrawState;
   Column: TStringGridColumn): UINT;
 const
   FlagML: array[Boolean] of UINT = (DT_SINGLELINE,
@@ -3202,7 +3185,7 @@ begin
 end;
 
 procedure TCustomStringGrid.GetCellFont(AFont: TFont; Column: TStringGridColumn;
-  const ARow: Integer; const AState: TGridDrawState);
+  ARow: Integer; AState: TGridDrawState);
 begin
   case Column <> nil of
     True:
@@ -3226,9 +3209,8 @@ begin
   end;
 end;
 
-function TCustomStringGrid.GetCellText(const ARow: Integer;
-  const Merged: Boolean; const Merging: TMerging;
-  Column: TStringGridColumn; Cell: PCell): String;
+function TCustomStringGrid.GetCellText(ARow: Integer; Merged: Boolean;
+  const Merging: TMerging; Column: TStringGridColumn; Cell: PCell): String;
 begin
   if Merged and Merging.MergeText then
     Result := Cells[Merging.Rect.Left, Merging.Rect.Top]
@@ -3320,7 +3302,7 @@ begin
     Result := FReadOnlyColor;
 end;
 
-function TCustomStringGrid.GetValues(const ACol, ARow: Integer): Variant;
+function TCustomStringGrid.GetValues(ACol, ARow: Integer): Variant;
 begin
   if Columns[ACol] <> nil then
     case Columns[ACol].InputStyle of
@@ -3340,7 +3322,7 @@ begin
 end;
 
 procedure TCustomStringGrid.ImportCSV(const FileName: TFileName;
-  const TitlesFirstRow: Boolean);
+  TitlesFirstRow: Boolean);
 { Rows[*].CommaText treats spaces as comma's, solution:
   ExtractStrings([','], [], PChar(Lines[i]), Rows[i + Offset[TitlesFirstRow]]);
   But we don't use this due to same problems with ExportCSV, which can't
@@ -3372,7 +3354,7 @@ begin
     AutoRowHeight(Row);
 end;
 
-procedure TCustomStringGrid.InsertColumn(const AtIndex: Integer);
+procedure TCustomStringGrid.InsertColumn(AtIndex: Integer);
 begin
   if ((AtIndex < 0) or (AtIndex > ColCount)) then
     raise EStringGridError.CreateFmt(SInvalidColumnInsertion, [AtIndex]);
@@ -3388,7 +3370,7 @@ begin
     FixedCols := FixedCols + 1;
 end;
 
-procedure TCustomStringGrid.InsertColumn(const Position: TInsertPos = ipBefore);
+procedure TCustomStringGrid.InsertColumn(Position: TInsertPos = ipBefore);
 begin
   case Position of
     ipBefore:
@@ -3402,7 +3384,7 @@ begin
   end;
 end;
 
-procedure TCustomStringGrid.InsertRow(const AtIndex: Integer);
+procedure TCustomStringGrid.InsertRow(AtIndex: Integer);
 begin
   RowCount := RowCount + 1;
   if AtIndex < RowCount - 1 then
@@ -3411,7 +3393,7 @@ begin
     FixedRows := FixedRows + 1;
 end;
 
-procedure TCustomStringGrid.InsertRow(const Position: TInsertPos = ipBefore);
+procedure TCustomStringGrid.InsertRow(Position: TInsertPos = ipBefore);
 begin
   case Position of
     ipBefore:
@@ -3435,7 +3417,7 @@ begin
   Result := FColumns.Count > 0;
 end;
 
-function TCustomStringGrid.IsEmptyColumn(const ACol: Integer): Boolean;
+function TCustomStringGrid.IsEmptyColumn(ACol: Integer): Boolean;
 var
   iRow: Integer;
 begin
@@ -3448,7 +3430,7 @@ begin
     end;
 end;
 
-function TCustomStringGrid.IsEmptyRow(const ARow: Integer): Boolean;
+function TCustomStringGrid.IsEmptyRow(ARow: Integer): Boolean;
 var
   iCol: Integer;
 begin
@@ -3490,7 +3472,7 @@ begin
   inherited Paint;
 end;
 
-function TCustomStringGrid.MouseCoord(const X, Y: Integer): TGridCoord;
+function TCustomStringGrid.MouseCoord(X, Y: Integer): TGridCoord;
 begin
   Result := CalcCoordFromPoint(X, Y);
   if Result.X < 0 then
@@ -3516,8 +3498,7 @@ begin
     FColSizing := True;
 end;
 
-procedure TCustomStringGrid.MouseToCell(const X, Y: Integer; var ACol,
-  ARow: Integer);
+procedure TCustomStringGrid.MouseToCell(X, Y: Integer; var ACol, ARow: Integer);
 var
   Coord: TGridCoord;
 begin
@@ -3543,7 +3524,7 @@ begin
   end;
 end;
 
-procedure TCustomStringGrid.MoveColumn(const FromIndex, ToIndex: Integer);
+procedure TCustomStringGrid.MoveColumn(FromIndex, ToIndex: Integer);
 begin
   if not CanColumnMove(FromIndex, ToIndex) then
   begin
@@ -3566,7 +3547,7 @@ begin
     end;
 end;
 
-procedure TCustomStringGrid.MoveRow(const FromIndex, ToIndex: Integer);
+procedure TCustomStringGrid.MoveRow(FromIndex, ToIndex: Integer);
 begin
   inherited MoveRow(FromIndex, ToIndex);
 end;
@@ -3599,8 +3580,8 @@ var
   CacheColors: TCacheColors;
   Glyph: TBitmap;
 
-  procedure DefaultDrawCell(const ACol, ARow: Integer; const InnerRect: TRect;
-    const AState: TGridDrawState; Column: TStringGridColumn; Cell: PCell);
+  procedure DefaultDrawCell(ACol, ARow: Integer; const InnerRect: TRect;
+    AState: TGridDrawState; Column: TStringGridColumn; Cell: PCell);
   var
     DrawSelected: Boolean;
     BGRect: TRect;
@@ -3620,8 +3601,7 @@ var
         Result := clWhite;
     end;
 
-    function GetAlphaBlendColor(Source, Dest: TColor;
-      const BlendValue: Byte): TColor;
+    function GetAlphaBlendColor(Source, Dest: TColor; BlendValue: Byte): TColor;
     { With thanks to: msdn.microsoft.com/en-us/library/dd183393(VS.85).aspx }
     var
       Src: TRGB;
@@ -3644,8 +3624,7 @@ var
       Result := CacheColors.Result
     end;
 
-    function GetSelectionColor(const Current: TColor;
-      const IsFont: Boolean): TColor;
+    function GetSelectionColor(Current: TColor; IsFont: Boolean): TColor;
     begin
       if SelectionAlphaBlend then
         Result := GetAlphaBlendColor(SelectionColor, Current,
@@ -3855,8 +3834,8 @@ var
     end;
   end;
 
-  procedure DrawCells(const StartCol, StartRow, StopCol, StopRow: Integer;
-    const IncludeDrawState: TGridDrawState);
+  procedure DrawCells(StartCol, StartRow, StopCol, StopRow: Integer;
+    IncludeDrawState: TGridDrawState);
   var
     iRect: TRect;
     StartY: Integer;
@@ -3989,8 +3968,8 @@ begin
     end;
 end;
 
-procedure TCustomStringGrid.ResetMainColors(const AGridColor: TColor = clWindow;
-  const AFixedColor: TColor = clBtnFace);
+procedure TCustomStringGrid.ResetMainColors(AGridColor: TColor = clWindow;
+  AFixedColor: TColor = clBtnFace);
 var
   i: Integer;
 begin
@@ -4016,7 +3995,7 @@ begin
   inherited Resize;
 end;
 
-procedure TCustomStringGrid.SetAutoRowHeights(const Value: Boolean);
+procedure TCustomStringGrid.SetAutoRowHeights(Value: Boolean);
 var
   i: Integer;
 begin
@@ -4036,8 +4015,7 @@ begin
     ColWidthsChanged;
 end;
 
-procedure TCustomStringGrid.SetCells(const ACol, ARow: Integer;
-  const Value: String);
+procedure TCustomStringGrid.SetCells(ACol, ARow: Integer; const Value: String);
 var
   MsgParam: String;
   Column: TStringGridColumn;
@@ -4089,20 +4067,19 @@ begin
   end;
 end;
 
-procedure TCustomStringGrid.SetColCount(const Value: Integer);
+procedure TCustomStringGrid.SetColCount(Value: Integer);
 begin
   if ColCount <> Value then
     if (Value >= Columns.Count) and (not SyncColumns) then
       inherited ColCount := Value;
 end;
 
-procedure TCustomStringGrid.SetColumns(const Value: TStringGridColumns);
+procedure TCustomStringGrid.SetColumns(Value: TStringGridColumns);
 begin
   FColumns.Assign(Value);
 end;
 
-procedure TCustomStringGrid.SetDefaultDrawing(
-  const Value: TDefaultDrawingModes);
+procedure TCustomStringGrid.SetDefaultDrawing(Value: TDefaultDrawingModes);
 begin
   FDefaultDrawing := Value;
   InvalidateGrid;
@@ -4115,7 +4092,7 @@ begin
     Cells[ACol, ARow] := Value;
 end;
 
-procedure TCustomStringGrid.SetFixedCols(const Value: Integer);
+procedure TCustomStringGrid.SetFixedCols(Value: Integer);
 var
   iCol, iRow: Integer;
   UnMergeRect: TGridRect;
@@ -4146,12 +4123,12 @@ begin
   end;
 end;
 
-procedure TCustomStringGrid.SetFixedFont(const Value: TFont);
+procedure TCustomStringGrid.SetFixedFont(Value: TFont);
 begin
   FFixedFont.Assign(Value);
 end;
 
-procedure TCustomStringGrid.SetFixedGridLineColor(const Value: TColor);
+procedure TCustomStringGrid.SetFixedGridLineColor(Value: TColor);
 begin
   if FFixedGridLineColor <> Value then
   begin
@@ -4160,7 +4137,7 @@ begin
   end;
 end;
 
-procedure TCustomStringGrid.SetFixedRows(const Value: Integer);
+procedure TCustomStringGrid.SetFixedRows(Value: Integer);
 var
   iCol: Integer;
   iRow: Integer;
@@ -4183,7 +4160,7 @@ begin
   end;
 end;
 
-procedure TCustomStringGrid.SetFocusRectColor(const Value: TColor);
+procedure TCustomStringGrid.SetFocusRectColor(Value: TColor);
 begin
   if FFocusRectColor <> Value then
   begin
@@ -4194,7 +4171,7 @@ begin
   end;
 end;
 
-procedure TCustomStringGrid.SetFocusRectStyle(const Value: TFocusRectStyle);
+procedure TCustomStringGrid.SetFocusRectStyle(Value: TFocusRectStyle);
 begin
   if FFocusRectStyle <> Value then
   begin
@@ -4205,8 +4182,8 @@ begin
   end;
 end;
 
-procedure TCustomStringGrid.SetGradientColumnColors(const First, Last: TColor;
-  const ColumnsOnly: Boolean);
+procedure TCustomStringGrid.SetGradientColumnColors(First, Last: TColor;
+  ColumnsOnly: Boolean);
 var
   Count: Integer;
   i: Integer;
@@ -4225,7 +4202,7 @@ begin
   end;
 end;
 
-procedure TCustomStringGrid.SetGridLineColor(const Value: TColor);
+procedure TCustomStringGrid.SetGridLineColor(Value: TColor);
 begin
   if FGridLineColor <> Value then
   begin
@@ -4234,7 +4211,7 @@ begin
   end;
 end;
 
-procedure TCustomStringGrid.SetGridLineWidth(const Value: Integer);
+procedure TCustomStringGrid.SetGridLineWidth(Value: Integer);
 { To keep invisible rows and columns invisible }
 var
   i: Integer;
@@ -4251,15 +4228,14 @@ begin
   end;
 end;
 
-procedure TCustomStringGrid.SetOnEditButtonClick(
-  const Value: TNotifyEvent);
+procedure TCustomStringGrid.SetOnEditButtonClick(Value: TNotifyEvent);
 begin
   FOnEditButtonClick := Value;
   if InplaceEditor <> nil then
     TInplaceEditListEx(InplaceEditor).OnEditButtonClick := FOnEditButtonClick;
 end;
 
-procedure TCustomStringGrid.SetReadOnlyColor(const Value: TColor);
+procedure TCustomStringGrid.SetReadOnlyColor(Value: TColor);
 begin
   if FReadOnlyColor <> Value then
   begin
@@ -4268,12 +4244,12 @@ begin
   end;
 end;
 
-procedure TCustomStringGrid.SetRowColors(const Value: TStringGridRowColors);
+procedure TCustomStringGrid.SetRowColors(Value: TStringGridRowColors);
 begin
   FRowColors.Assign(Value);
 end;
 
-procedure TCustomStringGrid.SetSelectionAlphaBlend(const Value: Boolean);
+procedure TCustomStringGrid.SetSelectionAlphaBlend(Value: Boolean);
 begin
   if FSelectionAlphaBlend <> Value then
   begin
@@ -4282,7 +4258,7 @@ begin
   end;
 end;
 
-procedure TCustomStringGrid.SetSelectionAlphaBlendValue(const Value: Byte);
+procedure TCustomStringGrid.SetSelectionAlphaBlendValue(Value: Byte);
 begin
   if FSelectionAlphaBlendValue <> Value then
   begin
@@ -4291,7 +4267,7 @@ begin
   end;
 end;
 
-procedure TCustomStringGrid.SetSelectionColor(const Value: TColor);
+procedure TCustomStringGrid.SetSelectionColor(Value: TColor);
 begin
   if FSelectionColor <> Value then
   begin
@@ -4319,7 +4295,7 @@ begin
   end;
 end;
 
-procedure TCustomStringGrid.SetSyncColumns(const Value: Boolean);
+procedure TCustomStringGrid.SetSyncColumns(Value: Boolean);
 begin
   if FSyncColumns <> Value then
   begin
@@ -4328,7 +4304,7 @@ begin
   end;
 end;
 
-procedure TCustomStringGrid.SetValues(const ACol, ARow: Integer;
+procedure TCustomStringGrid.SetValues(ACol, ARow: Integer;
   const Value: Variant);
 begin
   if VarIsNull(Value) or VarIsEmpty(Value) then
@@ -4385,7 +4361,7 @@ var
   BigDiff: Integer;
   Diff: Integer;
 
-  procedure AdjustColWidth(const ACol: Integer; var ADiff: Integer);
+  procedure AdjustColWidth(ACol: Integer; var ADiff: Integer);
   begin
     if ADiff <> 0 then
     begin
@@ -4447,7 +4423,7 @@ begin
     end;
 end;
 
-procedure TCustomStringGrid.UpdateColumn(const Index: Integer);
+procedure TCustomStringGrid.UpdateColumn(Index: Integer);
 begin
   InvalidateCol(Index);
 end;
