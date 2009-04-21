@@ -467,8 +467,6 @@ type
     FSelectionColor: TColor;
     FStretchModes: TStretchModes;
     FSyncColumns: Boolean;
-    procedure AutoColWidth(ACol: Integer);
-    procedure AutoRowHeight(ARow: Integer);
     function CalcCoordFromPoint(X, Y: Integer): TGridCoord;
     function CanColumnMove(FromIndex, ToIndex: Integer): Boolean;
     function CanEdit: Boolean;
@@ -605,6 +603,8 @@ type
     property Values[ACol, ARow: Integer]: Variant read GetValues
       write SetValues;
   public
+    procedure AutoColWidth(ACol: Integer);
+    procedure AutoRowHeight(ARow: Integer);
     constructor Create(AOwner: TComponent); override;
     procedure DeleteColumn(ACol: Integer); override;
     procedure DeleteRows(DeletePos: TDeletePos; StartIndex: Integer = -1;
