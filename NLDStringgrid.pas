@@ -3319,6 +3319,8 @@ begin
     end
   else
     Result := Cells[ACol, ARow];
+  if Result = '' then
+    Result := Null;
 end;
 
 procedure TCustomStringGrid.ImportCSV(const FileName: TFileName;
@@ -4365,7 +4367,7 @@ var
   begin
     if ADiff <> 0 then
     begin
-      if Columns[ACol] <> nil then
+      if (Columns[ACol] <> nil) and Columns[ACol].Visible then
       begin
         if (ADiff > 0) and (Columns[ACol].MaxWidth > 0) then
           ADiff := Min(ADiff, Columns[ACol].MaxWidth - ColWidths[ACol])
