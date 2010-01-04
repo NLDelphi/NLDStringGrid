@@ -10,8 +10,8 @@
 { *************************************************************************** }
 {                                                                             }
 { Last edit by: Albert de Weerd                                               }
-{ Date: March 16, 2009                                                        }
-{ Version: 2.0.0.2                                                            }
+{ Date: January 4, 2010                                                        }
+{ Version: 2.0.0.3                                                            }
 {                                                                             }
 { *************************************************************************** }
 
@@ -51,14 +51,14 @@ type
     FSectionCount: Word;
     FQuota: TListQuota;
     FAutoGrow: Boolean;
-    procedure CheckCapacity(const ACapacity: Integer);
-    function CreateSection(const SectionIndex: Word): Pointer;
-    function Get(const Index: Integer): Pointer;
-    procedure Put(const Index: Integer; Item: Pointer);
+    procedure CheckCapacity(ACapacity: Integer);
+    function CreateSection(SectionIndex: Word): Pointer;
+    function Get(Index: Integer): Pointer;
+    procedure Put(Index: Integer; Item: Pointer);
     procedure Recount;
-    procedure SetCount(const ACount: Integer);
-    procedure SetQuota(const AQuota: TListQuota);
-    procedure SetSectionCount(const NewSectionCount: Word);
+    procedure SetCount(ACount: Integer);
+    procedure SetQuota(AQuota: TListQuota);
+    procedure SetSectionCount(NewSectionCount: Word);
   protected
     property AutoGrow: Boolean read FAutoGrow write FAutoGrow;
     property Quota: TListQuota read FQuota write SetQuota;
@@ -69,24 +69,23 @@ type
     procedure Assign(Source: TObject);
     function Capacity: Integer;
     procedure Clear; virtual;
-    constructor Create(const AAutoGrow: Boolean = True;
-      const AQuota: TListQuota = lqSmall);
-    procedure Delete(const Index: Integer);
+    constructor Create(AAutoGrow: Boolean = True; AQuota: TListQuota = lqSmall);
+    procedure Delete(Index: Integer);
     destructor Destroy; override;
-    procedure Exchange(const Index1, Index2: Integer);
-    function Extract(const Index: Integer): Pointer; overload;
+    procedure Exchange(Index1, Index2: Integer);
+    function Extract(Index: Integer): Pointer; overload;
     function Extract(Item: Pointer): Pointer; overload;
     function First: Pointer;
     function ForAll(ProcessItemFunc: TProcessListItem;
-      const Descending: Boolean): Integer;
+      Descending: Boolean): Integer;
     function Grow: Boolean;
     function IndexOf(Item: Pointer): Integer;
-    procedure Insert(const Index: Integer; Item: Pointer);
+    procedure Insert(Index: Integer; Item: Pointer);
     function Last: Pointer;
-    procedure Move(const CurIndex, NewIndex: Integer);
+    procedure Move(CurIndex, NewIndex: Integer);
     procedure Pack;
     property Count: Integer read FCount write SetCount;
-    property Items[const Index: Integer]: Pointer read Get write Put; default;
+    property Items[Index: Integer]: Pointer read Get write Put; default;
   end;
 
   TSparseMatrix = class(TObject)
@@ -95,17 +94,17 @@ type
     FAutoGrowX: Boolean;
     FQuotaX: TListQuota;
     function GetAutoGrowY: Boolean;
-    function GetItem(const X, Y: Integer): Pointer;
+    function GetItem(X, Y: Integer): Pointer;
     function GetQuotaY: TListQuota;
-    function GetRow(const Y: Integer): TSparseList;
+    function GetRow(Y: Integer): TSparseList;
     function GetRowCount: Integer;
-    procedure SetAutoGrowX(const Value: Boolean);
-    procedure SetAutoGrowY(const Value: Boolean);
-    procedure SetItem(const X, Y: Integer; const Item: Pointer);
-    procedure SetQuotaX(const Value: TListQuota);
-    procedure SetQuotaY(const Value: TListQuota);
-    procedure SetRow(const Y: Integer; const Row: TSparseList);
-    procedure SetRowCount(const Value: Integer);
+    procedure SetAutoGrowX(Value: Boolean);
+    procedure SetAutoGrowY(Value: Boolean);
+    procedure SetItem(X, Y: Integer; Item: Pointer);
+    procedure SetQuotaX(Value: TListQuota);
+    procedure SetQuotaY(Value: TListQuota);
+    procedure SetRow(Y: Integer; Row: TSparseList);
+    procedure SetRowCount(Value: Integer);
   protected
     property AutoGrowX: Boolean read FAutoGrowX write SetAutoGrowX;
     property AutoGrowY: Boolean read GetAutoGrowY write SetAutoGrowY;
@@ -113,15 +112,13 @@ type
     property QuotaY: TListQuota read GetQuotaY write SetQuotaY;
   public
     procedure Clear;
-    constructor Create(const AutoGrow: Boolean = True;
-      const AQuota: TListQuota = lqSmall);
+    constructor Create(AutoGrow: Boolean = True; AQuota: TListQuota = lqSmall);
     destructor Destroy; override;
-    procedure MoveCol(const CurIndex, NewIndex: Integer);
-    procedure MoveRow(const CurIndex, NewIndex: Integer);
-    property Items[const X, Y: Integer]: Pointer read GetItem
-      write SetItem; default;
+    procedure MoveCol(CurIndex, NewIndex: Integer);
+    procedure MoveRow(CurIndex, NewIndex: Integer);
+    property Items[X, Y: Integer]: Pointer read GetItem write SetItem; default;
     property RowCount: Integer read GetRowCount write SetRowCount;
-    property Rows[const Y: Integer]: TSparseList read GetRow write SetRow;
+    property Rows[Y: Integer]: TSparseList read GetRow write SetRow;
   end;
 
 implementation
@@ -145,7 +142,7 @@ var
   i: Integer;
 begin
   StartFrom := FCount;
-  for i := Length(Items) - 1 to 0 do
+  for i := Length(Items) - 1 downto 0 do
     if Items[i] <> nil then
       Put(StartFrom + i, Items[i]);
 end;
@@ -156,7 +153,7 @@ var
   i: Integer;
 begin
   StartFrom := FCount;
-  for i := AList.Count - 1 to 0 do
+  for i := AList.Count - 1 downto 0 do
     if AList[i] <> nil then
       Put(StartFrom + i, AList[i]);
 end;
@@ -190,7 +187,7 @@ begin
   Result := MaxSectionCount * SectionSize[FQuota];
 end;
 
-procedure TSparseList.CheckCapacity(const ACapacity: Integer);
+procedure TSparseList.CheckCapacity(ACapacity: Integer);
 begin
   while FAutoGrow and (ACapacity > Capacity) and Grow do;
   if ACapacity > Capacity then
@@ -203,15 +200,15 @@ begin
   SetSectionCount(0);
 end;
 
-constructor TSparseList.Create(const AAutoGrow: Boolean = True;
-  const AQuota: TListQuota = lqSmall);
+constructor TSparseList.Create(AAutoGrow: Boolean = True;
+  AQuota: TListQuota = lqSmall);
 begin
   inherited Create;
   FAutoGrow := AAutoGrow;
   FQuota := AQuota;
 end;
 
-function TSparseList.CreateSection(const SectionIndex: Word): Pointer;
+function TSparseList.CreateSection(SectionIndex: Word): Pointer;
 var
   Size: Cardinal;
 begin
@@ -220,7 +217,7 @@ begin
   FillChar(Result^, Size, 0);
 end;
 
-procedure TSparseList.Delete(const Index: Integer);
+procedure TSparseList.Delete(Index: Integer);
 var
   i: Integer;
 begin
@@ -242,7 +239,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TSparseList.Exchange(const Index1, Index2: Integer);
+procedure TSparseList.Exchange(Index1, Index2: Integer);
 var
   Temp: Pointer;
 begin
@@ -251,7 +248,7 @@ begin
   Put(Index2, Temp);
 end;
 
-function TSparseList.Extract(const Index: Integer): Pointer;
+function TSparseList.Extract(Index: Integer): Pointer;
 begin
   if (Index < 0) or (Index >= FCount) then
     Result := nil
@@ -273,7 +270,7 @@ begin
 end;
 
 function TSparseList.ForAll(ProcessItemFunc: TProcessListItem;
-  const Descending: Boolean): Integer;
+  Descending: Boolean): Integer;
 { Asm code taken from Grids.TSparsePointerArray.ForAll }
 var
   CallerBP: Cardinal;
@@ -350,7 +347,7 @@ begin
     end;
 end;
 
-function TSparseList.Get(const Index: Integer): Pointer;
+function TSparseList.Get(Index: Integer): Pointer;
 var
   SectionIndex: Word;
   P: PChar;
@@ -393,7 +390,7 @@ begin
     Result := -1;
 end;
 
-procedure TSparseList.Insert(const Index: Integer; Item: Pointer);
+procedure TSparseList.Insert(Index: Integer; Item: Pointer);
 var
   i: Integer;
 begin
@@ -411,7 +408,7 @@ begin
   Result := Get(FCount - 1);
 end;
 
-procedure TSparseList.Move(const CurIndex, NewIndex: Integer);
+procedure TSparseList.Move(CurIndex, NewIndex: Integer);
 var
   Temp: Pointer;
 begin
@@ -432,7 +429,7 @@ begin
       Delete(i);
 end;
 
-procedure TSparseList.Put(const Index: Integer; Item: Pointer);
+procedure TSparseList.Put(Index: Integer; Item: Pointer);
 var
   SectionIndex: Word;
   P: PChar;
@@ -467,7 +464,7 @@ end;
 
 procedure TSparseList.Recount;
 
-  function ResetCount(const Index: Integer; Item: Pointer): Integer;
+  function ResetCount(Index: Integer; Item: Pointer): Integer;
   begin
     FCount := Index + 1;
     Result := 1;
@@ -478,7 +475,7 @@ begin
   ForAll(@ResetCount, True);
 end;
 
-procedure TSparseList.SetCount(const ACount: Integer);
+procedure TSparseList.SetCount(ACount: Integer);
 var
   i: Integer;
 begin
@@ -493,7 +490,7 @@ begin
   end;
 end;
 
-procedure TSparseList.SetQuota(const AQuota: TListQuota);
+procedure TSparseList.SetQuota(AQuota: TListQuota);
 var
   Temp: TSparseList;
 begin
@@ -516,7 +513,7 @@ begin
   end;
 end;
 
-procedure TSparseList.SetSectionCount(const NewSectionCount: Word);
+procedure TSparseList.SetSectionCount(NewSectionCount: Word);
 var
   i: Integer;
 begin
@@ -544,8 +541,8 @@ begin
   SetRowCount(0);
 end;
 
-constructor TSparseMatrix.Create(const AutoGrow: Boolean = True;
-  const AQuota: TListQuota = lqSmall);
+constructor TSparseMatrix.Create(AutoGrow: Boolean = True;
+  AQuota: TListQuota = lqSmall);
 begin
   inherited Create;
   FRows := TSparseList.Create(AutoGrow, AQuota);
@@ -565,7 +562,7 @@ begin
   Result := FRows.AutoGrow;
 end;
 
-function TSparseMatrix.GetItem(const X, Y: Integer): Pointer;
+function TSparseMatrix.GetItem(X, Y: Integer): Pointer;
 var
   Row: TSparseList;
 begin
@@ -581,7 +578,7 @@ begin
   Result := FRows.Quota;
 end;
 
-function TSparseMatrix.GetRow(const Y: Integer): TSparseList;
+function TSparseMatrix.GetRow(Y: Integer): TSparseList;
 begin
   Result := FRows[Y];
 end;
@@ -591,7 +588,7 @@ begin
   Result := FRows.Count;
 end;
 
-procedure TSparseMatrix.MoveCol(const CurIndex, NewIndex: Integer);
+procedure TSparseMatrix.MoveCol(CurIndex, NewIndex: Integer);
 
   function MoveInRow(Y: Integer; Row: TSparseList): Integer;
   begin
@@ -603,12 +600,12 @@ begin
   FRows.ForAll(@MoveInRow, False);
 end;
 
-procedure TSparseMatrix.MoveRow(const CurIndex, NewIndex: Integer);
+procedure TSparseMatrix.MoveRow(CurIndex, NewIndex: Integer);
 begin
   FRows.Move(CurIndex, NewIndex);
 end;
 
-procedure TSparseMatrix.SetAutoGrowX(const Value: Boolean);
+procedure TSparseMatrix.SetAutoGrowX(Value: Boolean);
 
   function SetAutoGrow(const Y: Integer; Row: TSparseList): Integer;
   begin
@@ -624,12 +621,12 @@ begin
   end;
 end;
 
-procedure TSparseMatrix.SetAutoGrowY(const Value: Boolean);
+procedure TSparseMatrix.SetAutoGrowY(Value: Boolean);
 begin
   FRows.AutoGrow := Value;
 end;
 
-procedure TSparseMatrix.SetItem(const X, Y: Integer; const Item: Pointer);
+procedure TSparseMatrix.SetItem(X, Y: Integer; Item: Pointer);
 var
   Row: TSparseList;
 begin
@@ -644,7 +641,7 @@ begin
     end;
 end;
 
-procedure TSparseMatrix.SetQuotaX(const Value: TListQuota);
+procedure TSparseMatrix.SetQuotaX(Value: TListQuota);
 
   function SetQuota(const Y: Integer; Row: TSparseList): Integer;
   begin
@@ -660,17 +657,17 @@ begin
   end;
 end;
 
-procedure TSparseMatrix.SetQuotaY(const Value: TListQuota);
+procedure TSparseMatrix.SetQuotaY(Value: TListQuota);
 begin
   FRows.Quota := Value;
 end;
 
-procedure TSparseMatrix.SetRow(const Y: Integer; const Row: TSparseList);
+procedure TSparseMatrix.SetRow(Y: Integer; Row: TSparseList);
 begin
   FRows[Y] := Row;
 end;
 
-procedure TSparseMatrix.SetRowCount(const Value: Integer);
+procedure TSparseMatrix.SetRowCount(Value: Integer);
 
   function FreeRow(const Y: Integer; Row: TSparseList): Integer;
   begin
