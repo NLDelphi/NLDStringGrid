@@ -11,8 +11,8 @@
 { *************************************************************************** }
 {                                                                             }
 { Edit by: Albert de Weerd (aka NGLN)                                         }
-{ Date: March 20, 2009                                                        }
-{ Version: 2.0.0.2                                                            }
+{ Date: January 14, 2010                                                      }
+{ Version: 2.0.0.3                                                            }
 {                                                                             }
 { *************************************************************************** }
 
@@ -1148,9 +1148,9 @@ begin
   inherited Destroy;
 end;
 
-procedure TDataGrid.DisposeData(NewColCount, NewRowCount: Integer);
+procedure TDataGrid.DisposeData(const NewColCount, NewRowCount: Integer);
 
-  function DisposeCell(ACol: Integer; Cell: PCell): Integer;
+  function DisposeRightCell(ACol: Integer; Cell: PCell): Integer;
   begin
     if ACol >= NewColCount then
     begin
@@ -1163,21 +1163,47 @@ procedure TDataGrid.DisposeData(NewColCount, NewRowCount: Integer);
       Result := 1;
   end;
 
+  function DisposeBottomCell(ACol: Integer; Cell: PCell): Integer;
+  begin
+    if FOwnsObjects then
+      Cell^.FObject.Free;
+    Dispose(Cell);
+    Result := 0;
+  end;
+
 var
   iCol: Integer;
   iRow: Integer;
 begin
   if moSparseStorage in FMemoryOptions then
   begin
+    for iRow := 0 to NewRowCount - 1 do
+      if TSparseMatrix(FData).Rows[iRow] <> nil then
+      begin
+        TSparseMatrix(FData).Rows[iRow].ForAll(@DisposeRightCell, True);
+        TSparseMatrix(FData).Rows[iRow].Count := NewColCount;
+      end;
     for iRow := NewRowCount to TSparseMatrix(FData).RowCount - 1 do
       if TSparseMatrix(FData).Rows[iRow] <> nil then
-        TSparseMatrix(FData).Rows[iRow].ForAll(@DisposeCell, True);
-    TSparseMatrix(FData).RowCount := NewRowCount;
+      begin
+        TSparseMatrix(FData).Rows[iRow].ForAll(@DisposeBottomCell, True);
+        TSparseMatrix(FData).Rows[iRow].Count := 0;
+      end;
+    if TSparseMatrix(FData).RowCount > NewRowCount then
+      TSparseMatrix(FData).RowCount := NewRowCount;
   end
   else
     with TMatrix(FData) do
     begin
       for iCol := NewColCount to Length(FItems) - 1 do
+        for iRow := 0 to NewRowCount - 1 do
+          if FItems[iCol, iRow] <> nil then
+          begin
+            if FOwnsObjects then
+              PCell(FItems[iCol, iRow])^.FObject.Free;
+            Dispose(PCell(FItems[iCol, iRow]));
+          end;
+      for iCol := 0 to Length(FItems) - 1 do
         for iRow := NewRowCount to Length(FItems[iCol]) - 1 do
           if FItems[iCol, iRow] <> nil then
           begin
