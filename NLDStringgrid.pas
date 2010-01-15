@@ -1148,7 +1148,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TDataGrid.DisposeData(const NewColCount, NewRowCount: Integer);
+procedure TDataGrid.DisposeData(NewColCount, NewRowCount: Integer);
 
   function DisposeRightCell(ACol: Integer; Cell: PCell): Integer;
   begin
