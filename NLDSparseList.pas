@@ -10,8 +10,8 @@
 { *************************************************************************** }
 {                                                                             }
 { Last edit by: Albert de Weerd                                               }
-{ Date: January 4, 2010                                                        }
-{ Version: 2.0.0.3                                                            }
+{ Date: September 2, 2010                                                     }
+{ Version: 2.0.0.4                                                            }
 {                                                                             }
 { *************************************************************************** }
 
@@ -31,7 +31,6 @@ type
   TPointerArray = array of Pointer;
 
   TProcessListItem = function(const Index: Integer; Item: Pointer): Integer;
-  TProcessMatrixItem = function(const X, Y: Integer; Item: Pointer): Integer;
   { Must return 0 if successfull }
   { Item is guaranteed non-nil }
 
@@ -112,10 +111,12 @@ type
     property QuotaY: TListQuota read GetQuotaY write SetQuotaY;
   public
     procedure Clear;
+    procedure Compress;
     constructor Create(AutoGrow: Boolean = True; AQuota: TListQuota = lqSmall);
     destructor Destroy; override;
     procedure MoveCol(CurIndex, NewIndex: Integer);
     procedure MoveRow(CurIndex, NewIndex: Integer);
+    procedure Pack;
     property Items[X, Y: Integer]: Pointer read GetItem write SetItem; default;
     property RowCount: Integer read GetRowCount write SetRowCount;
     property Rows[Y: Integer]: TSparseList read GetRow write SetRow;
@@ -541,6 +542,20 @@ begin
   SetRowCount(0);
 end;
 
+procedure TSparseMatrix.Compress;
+var
+  iRow: Integer;
+  Row: TSparseList;
+begin
+  for iRow := 0 to RowCount - 1 do
+  begin
+    Row := FRows[iRow];
+    if Row <> nil then
+      if Row.Count = 0 then
+        SetRow(iRow, nil);
+  end;
+end;
+
 constructor TSparseMatrix.Create(AutoGrow: Boolean = True;
   AQuota: TListQuota = lqSmall);
 begin
@@ -605,6 +620,21 @@ begin
   FRows.Move(CurIndex, NewIndex);
 end;
 
+procedure TSparseMatrix.Pack;
+var
+  iRow: Integer;
+  Row: TSparseList;
+begin
+  for iRow := 0 to RowCount - 1 do
+  begin
+    Row := FRows[iRow];
+    if Row <> nil then
+      Row.Pack;
+    if Row.Count = 0 then
+      SetRow(iRow, nil);
+  end;
+end;
+
 procedure TSparseMatrix.SetAutoGrowX(Value: Boolean);
 
   function SetAutoGrow(const Y: Integer; Row: TSparseList): Integer;
@@ -664,6 +694,8 @@ end;
 
 procedure TSparseMatrix.SetRow(Y: Integer; Row: TSparseList);
 begin
+  if Row = nil then
+    TObject(FRows[Y]).Free;
   FRows[Y] := Row;
 end;
 
