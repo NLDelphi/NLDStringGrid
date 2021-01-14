@@ -1,11 +1,6 @@
 NLDStringGrid
 =============
 
-!!! NOTE: NLDSPARSELIST.PAS IS REQUIRED !!!
-
-See http://svn.nldelphi.com/nldelphi/opensource/ngln/NLDSparseList.pas
-
-
 Compared to Delphi's default TStringGrid:
 
 Added functionality:
